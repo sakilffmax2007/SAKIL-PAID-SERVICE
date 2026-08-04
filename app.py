@@ -499,7 +499,7 @@ LOGIN_HTML = '''
 '''
 
 # ============================================
-# USER DASHBOARD - PERFECT LOCATION WITH BORDER
+# USER DASHBOARD - PERFECT LOCATION WITH BORDER (UPDATED)
 # ============================================
 USER_PANEL_HTML = '''
 <!DOCTYPE html>
@@ -1291,8 +1291,33 @@ USER_PANEL_HTML = '''
     }
 
     // ============================================
-    // 📍 LOCATION FUNCTIONS - RED BORDER
+    // 📍 LOCATION FUNCTIONS - FULL AREA VIEW (RED BORDER)
     // ============================================
+
+    function parseAreaName(address) {
+        if (!address || address === 'N/A' || address === 'Unknown' || address === '') {
+            return null;
+        }
+        
+        // মেসি ফরম্যাট ক্লিন করি: "!!.INARAYANPUR North 24 Parganas!!NORTH 24 PARGANAS!!North 24 Parganas!!West Bengal!!743234"
+        let cleaned = address.replace(/!!\.?/g, '').replace(/!!/g, '!');
+        let parts = cleaned.split('!').filter(p => p.trim().length > 0);
+        
+        if (parts.length > 0) {
+            let area = parts[0].trim();
+            if (parts.length > 1) {
+                let second = parts[1].trim();
+                if (/[A-Za-z]/.test(second) && second.length > 3) {
+                    if (!area.includes(second) && !second.includes(area)) {
+                        area = area + ', ' + second;
+                    }
+                }
+            }
+            return area;
+        }
+        
+        return address.substring(0, 35);
+    }
 
     function updateLocationMap(address, lat, lng, type) {
         const section = document.getElementById('locationSection');
@@ -1308,8 +1333,8 @@ USER_PANEL_HTML = '''
             return;
         }
 
-        // লোকেশন টাইপ অনুযায়ী রেড বর্ডার সেট করি
-        if (type === 'live') {
+        // লোকেশন টাইপ সেট করি
+        if (type === 'live' && lat && lng) {
             locationType.textContent = '🔴 LIVE';
             badge.className = 'location-badge live';
             section.className = 'location-section show live';
@@ -1319,18 +1344,27 @@ USER_PANEL_HTML = '''
             section.className = 'location-section show area';
         }
 
-        // ল্যাট/লং থাকলে সেটা ব্যবহার করি, না হলে এড্রেস
-        let query = address;
+        // পুরো এলাকা দেখানোর জন্য এলাকার নাম পার্স করি
+        let areaName = parseAreaName(address);
+        if (!areaName) {
+            areaName = address.substring(0, 35);
+        }
+
+        // 🔥 ক্রিটিক্যাল চেঞ্জ: place এর বদলে search ব্যবহার করি, zoom 13 (পুরো এলাকা দেখাবে)
+        let query = areaName;
         if (lat && lng) {
+            // ল্যাট/লং থাকলেও zoom 13 দিয়ে পুরো এলাকা দেখাই
             query = `${lat},${lng}`;
         }
 
-        const cleanAddress = encodeURIComponent(query);
-        const mapUrl = `https://www.google.com/maps/embed/v1/place?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8&q=${cleanAddress}&zoom=16&maptype=roadmap`;
+        const cleanQuery = encodeURIComponent(query);
+        
+        // embed/v1/search ব্যবহার করি - এটা পুরো এলাকা দেখায়, শুধু পিন পয়েন্ট না
+        const mapUrl = `https://www.google.com/maps/embed/v1/search?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8&q=${cleanQuery}&zoom=13&maptype=roadmap`;
 
         iframe.src = mapUrl;
-        label.textContent = address.substring(0, 60) + (address.length > 60 ? '...' : '');
-        openLink.href = `https://www.google.com/maps/search/?api=1&query=${cleanAddress}`;
+        label.textContent = areaName.substring(0, 60) + (areaName.length > 60 ? '...' : '');
+        openLink.href = `https://www.google.com/maps/search/?api=1&query=${cleanQuery}`;
         section.classList.add('show');
 
         setTimeout(() => {
