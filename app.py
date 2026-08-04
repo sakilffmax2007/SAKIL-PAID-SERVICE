@@ -3,10 +3,10 @@
 
 """
 ============================================
-SAKIL BHAI - USER PANEL v9.0 PREMIUM
+SAKIL BHAI - USER PANEL v8.0 VIP PREMIUM
 🔥 CYBERPUNK EDITION · NEON GLASS MORPHISM
 Premium Hacking System · Firebase Powered
-📍 CIRCULAR MAP VIEW WITH RED BORDER
+📍 PERFECT LOCATION TRACKING WITH BORDER
 ============================================
 """
 
@@ -499,7 +499,7 @@ LOGIN_HTML = '''
 '''
 
 # ============================================
-# USER DASHBOARD - CIRCULAR MAP VIEW
+# USER DASHBOARD - PERFECT LOCATION WITH BORDER
 # ============================================
 USER_PANEL_HTML = '''
 <!DOCTYPE html>
@@ -833,97 +833,63 @@ USER_PANEL_HTML = '''
         .result-item .value.addr { font-size: 10px; color: #88ddff; line-height: 1.4; }
 
         /* ============================================
-           CIRCULAR MAP VIEW - PERFECT CIRCLE
+           LOCATION SECTION - PERFECT BORDER STYLES
            ============================================ */
         .location-section {
-            width: 320px;
-            height: 320px;
-            margin: 16px auto;
-            border-radius: 50%;
+            margin-top: 14px;
+            border: 3px solid #00ff66;
+            border-radius: 14px;
             overflow: hidden;
             display: none;
-            background: #0a0a1a;
-            border: 5px solid #ff0000;
-            box-shadow: 0 0 60px rgba(255, 0, 0, 0.2), inset 0 0 60px rgba(255, 0, 0, 0.05);
-            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-            position: relative;
+            background: rgba(0,0,0,0.1);
+            box-shadow: 0 0 40px rgba(0, 255, 102, 0.08), inset 0 0 40px rgba(0, 255, 102, 0.02);
+            transition: all 0.4s ease;
         }
-        .location-section.show {
-            display: block;
-            animation: circularPop 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        .location-section.show { 
+            display: block; 
+            animation: slideUp 0.5s ease;
         }
-        @keyframes circularPop {
-            0% { opacity: 0; transform: scale(0.7) rotate(-10deg); }
-            100% { opacity: 1; transform: scale(1) rotate(0deg); }
-        }
+        /* LIVE লোকেশন হলে বর্ডার লাল হবে */
         .location-section.live {
             border-color: #ff0000 !important;
-            box-shadow: 0 0 80px rgba(255, 0, 0, 0.25), inset 0 0 80px rgba(255, 0, 0, 0.08) !important;
+            box-shadow: 0 0 50px rgba(255, 0, 0, 0.15), inset 0 0 50px rgba(255, 0, 0, 0.03) !important;
         }
+        /* AREA লোকেশন হলে বর্ডার লাল হবে (রেড বর্ডার) */
         .location-section.area {
             border-color: #ff0000 !important;
-            box-shadow: 0 0 60px rgba(255, 0, 0, 0.15), inset 0 0 60px rgba(255, 0, 0, 0.05) !important;
+            box-shadow: 0 0 40px rgba(255, 0, 0, 0.08), inset 0 0 40px rgba(255, 0, 0, 0.02) !important;
         }
         .location-section .map-container {
-            width: 100%;
-            height: 100%;
             position: relative;
-            overflow: hidden;
+            width: 100%;
+            padding-bottom: 56.25%;
+            background: #0a0a1a;
+            cursor: pointer;
         }
         .location-section .map-container iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-            transform: scale(1.15);
-        }
-        /* এলাকার নাম - সার্কেলের উপরে */
-        .location-section .area-name {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.75);
-            backdrop-filter: blur(15px);
-            padding: 12px 28px;
-            border-radius: 50px;
-            font-size: 20px;
-            font-weight: 700;
-            font-family: 'Orbitron', monospace;
-            color: #ffffff;
-            border: 2px solid rgba(255,0,0,0.3);
-            z-index: 10;
-            letter-spacing: 2px;
-            text-align: center;
-            white-space: nowrap;
-            box-shadow: 0 8px 40px rgba(0,0,0,0.5);
-            text-shadow: 0 0 20px rgba(255,0,0,0.2);
-            pointer-events: none;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            border: none;
+            border-radius: 0;
         }
-        .location-section .area-name i {
-            color: #ff0000;
-            margin-right: 10px;
-            font-size: 18px;
-        }
-        /* লোকেশন টাইপ ব্যাজ - নিচে ডানদিকে */
         .location-section .map-container .location-badge {
             position: absolute;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(0,0,0,0.8);
-            backdrop-filter: blur(15px);
-            padding: 6px 16px;
-            border-radius: 30px;
-            font-size: 9px;
+            top: 12px;
+            right: 12px;
+            background: rgba(0,0,0,0.75);
+            backdrop-filter: blur(10px);
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 8px;
             font-family: 'Orbitron', monospace;
-            color: #ff0000;
-            border: 1px solid rgba(255,0,0,0.2);
+            color: #00ff66;
+            border: 1px solid rgba(0,255,102,0.2);
             z-index: 10;
             letter-spacing: 1px;
             display: flex;
             align-items: center;
-            gap: 8px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            pointer-events: none;
+            gap: 6px;
         }
         .location-section .map-container .location-badge i {
             font-size: 10px;
@@ -935,29 +901,66 @@ USER_PANEL_HTML = '''
         }
         .location-section .map-container .location-badge.area { 
             color: #ff0000; 
-            border-color: rgba(255,0,0,0.2);
+            border-color: rgba(255,0,0,0.3);
         }
         @keyframes pulseBadge {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.6; }
         }
 
-        /* লোকেশন রেজাল্ট আইটেম */
+        .location-section .map-label {
+            padding: 8px 14px;
+            font-size: 7px;
+            font-family: 'Orbitron', monospace;
+            color: #88ddff;
+            letter-spacing: 2px;
+            text-align: center;
+            background: rgba(0,0,0,0.15);
+            border-top: 1px solid rgba(0,255,255,0.03);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .location-section .map-label .hint {
+            color: #88ddff;
+        }
+        .location-section .map-label .hint i {
+            color: #ff0000;
+            margin-right: 4px;
+        }
+        .location-section .map-label .open-link {
+            font-size: 7px;
+            font-family: 'Orbitron', monospace;
+            color: #00ffff;
+            text-decoration: none;
+            padding: 2px 12px;
+            border: 1px solid rgba(0,255,255,0.1);
+            border-radius: 20px;
+            transition: all 0.3s ease;
+        }
+        .location-section .map-label .open-link:hover {
+            background: rgba(0,255,255,0.05);
+            border-color: rgba(0,255,255,0.3);
+        }
         .result-item.location-item {
-            border-left: 4px solid #ff0000;
-            background: rgba(255,0,0,0.03);
+            border-left: 4px solid #00ff66;
+            background: rgba(0,255,102,0.03);
             border-radius: 4px;
             margin: 2px 0;
             padding: 8px 16px;
         }
-        .result-item.location-item .label i { color: #ff0000; }
-        .result-item.location-item .value { color: #ff0000; font-weight: 500; }
+        .result-item.location-item .label i { color: #00ff66; }
+        .result-item.location-item .value { color: #00ff66; font-weight: 500; }
+        /* LIVE হলে লেফট বর্ডার লাল হবে */
         .result-item.location-item.live {
             border-left-color: #ff0000 !important;
             background: rgba(255,0,0,0.03) !important;
         }
         .result-item.location-item.live .label i { color: #ff0000 !important; }
         .result-item.location-item.live .value { color: #ff0000 !important; }
+        /* AREA হলে লেফট বর্ডার লাল হবে */
         .result-item.location-item.area {
             border-left-color: #ff0000 !important;
             background: rgba(255,0,0,0.03) !important;
@@ -1081,7 +1084,6 @@ USER_PANEL_HTML = '''
         ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-track { background: #06060a; }
         ::-webkit-scrollbar-thumb { background: rgba(0,255,255,0.05); border-radius: 10px; }
-
         @media (max-width: 480px) {
             .main-header .brand .text h1 { font-size: 13px; letter-spacing: 1px; }
             .main-header .brand img { width: 32px; height: 32px; }
@@ -1094,30 +1096,10 @@ USER_PANEL_HTML = '''
             .result-item .value { width: 100%; text-align: left; }
             .main-container { padding: 12px 10px; }
             .badge-row { gap: 10px; }
-            .location-section {
-                width: 240px;
-                height: 240px;
-            }
-            .location-section .area-name {
-                font-size: 14px;
-                padding: 8px 16px;
-            }
-            .location-section .area-name i { font-size: 12px; }
             .location-section .map-container .location-badge {
-                font-size: 7px;
-                padding: 4px 12px;
-                bottom: 12px;
-                right: 12px;
-            }
-        }
-        @media (max-width: 380px) {
-            .location-section {
-                width: 200px;
-                height: 200px;
-            }
-            .location-section .area-name {
-                font-size: 11px;
-                padding: 6px 12px;
+                top: 8px; right: 8px;
+                font-size: 6px;
+                padding: 2px 10px;
             }
         }
     </style>
@@ -1190,7 +1172,7 @@ USER_PANEL_HTML = '''
                 </div>
 
                 <!-- ============================================
-                📍 CIRCULAR MAP VIEW
+                📍 LOCATION MAP SECTION - RED BORDER
                 ============================================ -->
                 <div class="location-section" id="locationSection">
                     <div class="map-container" id="mapContainer">
@@ -1200,15 +1182,16 @@ USER_PANEL_HTML = '''
                             loading="lazy"
                             referrerpolicy="no-referrer-when-downgrade">
                         </iframe>
-                        <!-- এলাকার নাম - সার্কেলের মাঝখানে -->
-                        <div class="area-name" id="areaName">
-                            <i class="fas fa-map-pin"></i> <span id="locationLabel">Loading...</span>
-                        </div>
-                        <!-- লোকেশন টাইপ ব্যাজ - নিচে ডানদিকে -->
                         <div class="location-badge" id="locationBadge">
                             <i class="fas fa-satellite-dish"></i>
                             <span id="locationType">LIVE</span>
                         </div>
+                    </div>
+                    <div class="map-label">
+                        <span class="hint"><i class="fas fa-map-pin"></i> <span id="locationLabel">Location</span></span>
+                        <a href="#" id="openMapsLink" class="open-link" target="_blank">
+                            <i class="fas fa-external-link-alt"></i> Google Maps
+                        </a>
                     </div>
                 </div>
 
@@ -1308,16 +1291,16 @@ USER_PANEL_HTML = '''
     }
 
     // ============================================
-    // 📍 CIRCULAR MAP VIEW
+    // 📍 LOCATION FUNCTIONS - RED BORDER
     // ============================================
 
-    function updateLocationMap(address, lat, lng, type, areaName) {
+    function updateLocationMap(address, lat, lng, type) {
         const section = document.getElementById('locationSection');
         const iframe = document.getElementById('mapIframe');
         const label = document.getElementById('locationLabel');
+        const openLink = document.getElementById('openMapsLink');
         const badge = document.getElementById('locationBadge');
         const locationType = document.getElementById('locationType');
-        const areaNameEl = document.getElementById('areaName');
 
         if (!address || address === 'N/A' || address === 'Unknown' || address === '') {
             section.classList.remove('show');
@@ -1325,15 +1308,7 @@ USER_PANEL_HTML = '''
             return;
         }
 
-        // এলাকার নাম সেট করি - শুধু মেইন এলাকার নাম
-        let shortName = areaName || address.split(';')[0] || address.split(',')[0] || address;
-        if (shortName.length > 30) {
-            shortName = shortName.substring(0, 30) + '...';
-        }
-        label.textContent = shortName;
-        areaNameEl.innerHTML = `<i class="fas fa-map-pin"></i> ${shortName}`;
-
-        // লোকেশন টাইপ সেট করি
+        // লোকেশন টাইপ অনুযায়ী রেড বর্ডার সেট করি
         if (type === 'live') {
             locationType.textContent = '🔴 LIVE';
             badge.className = 'location-badge live';
@@ -1344,15 +1319,22 @@ USER_PANEL_HTML = '''
             section.className = 'location-section show area';
         }
 
-        // এড্রেস দিয়ে সার্চ করি - পুরো এলাকা দেখানোর জন্য Zoom 15
-        const cleanAddress = encodeURIComponent(address);
-        const mapUrl = `https://www.google.com/maps/embed/v1/place?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8&q=${cleanAddress}&zoom=15&maptype=roadmap`;
+        // ল্যাট/লং থাকলে সেটা ব্যবহার করি, না হলে এড্রেস
+        let query = address;
+        if (lat && lng) {
+            query = `${lat},${lng}`;
+        }
+
+        const cleanAddress = encodeURIComponent(query);
+        const mapUrl = `https://www.google.com/maps/embed/v1/place?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8&q=${cleanAddress}&zoom=16&maptype=roadmap`;
 
         iframe.src = mapUrl;
+        label.textContent = address.substring(0, 60) + (address.length > 60 ? '...' : '');
+        openLink.href = `https://www.google.com/maps/search/?api=1&query=${cleanAddress}`;
         section.classList.add('show');
 
         setTimeout(() => {
-            section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }, 300);
     }
 
@@ -1419,15 +1401,13 @@ USER_PANEL_HTML = '''
                 <span class="value gr">${info.aadhar || 'N/A'}</span>
             </div>`;
             
-            // ===== লোকেশন =====
+            // ===== লোকেশন - লাইভ নাকি এরিয়া (উভয় ক্ষেত্রেই রেড বর্ডার) =====
             const address = info.address || info.location || 'N/A';
             const hasLatLng = (info.lat && info.lng);
             const locationType = hasLatLng ? 'live' : 'area';
             const locationIcon = hasLatLng ? 'fa-satellite-dish' : 'fa-map-pin';
-            const locationColor = '#ff0000';
+            const locationColor = '#ff0000'; // সবসময় রেড
             const locationClass = hasLatLng ? 'live' : 'area';
-            
-            let areaName = address.split(';')[0] || address.split(',')[0] || address;
             
             html += `<div class="result-item location-item ${locationClass}">
                 <span class="label"><i class="fas ${locationIcon}" style="color:${locationColor};"></i> location</span>
@@ -1458,11 +1438,11 @@ USER_PANEL_HTML = '''
             resultBox.classList.add('show');
             errorText.classList.remove('show');
 
-            // 📍 সার্কুলার ম্যাপ দেখান
+            // 📍 লোকেশন ম্যাপ আপডেট করো - রেড বর্ডার সহ
             if (address && address !== 'N/A') {
                 const lat = info.lat || null;
                 const lng = info.lng || null;
-                updateLocationMap(address, lat, lng, locationType, areaName);
+                updateLocationMap(address, lat, lng, locationType);
             }
 
             let apiHtml = '';
@@ -1549,9 +1529,10 @@ USER_PANEL_HTML = '''
     });
     document.addEventListener('dragstart', function(e) { e.preventDefault(); return false; });
 
+    // ✅ পেজ লোড হলে আর অটো সার্চ হবে না
     document.addEventListener('DOMContentLoaded', function() {
-        console.log('🔥 SAKIL BHAI PREMIUM SYSTEM READY');
-        console.log('📍 CIRCULAR MAP VIEW ENABLED');
+        console.log('🔥 SAKIL BHAI SYSTEM READY');
+        console.log('📱 Enter a 10-digit number and click search');
     });
     </script>
 </body>
@@ -2313,6 +2294,7 @@ def lookup():
             info = result[0]
             address = info.get('address', info.get('location', ''))
             
+            # লোকেশন লাইভ কিনা চেক করি - ল্যাট/লং থাকলে লাইভ
             if 'lat' not in info and 'lng' not in info and address and address != 'N/A':
                 try:
                     geocode_url = f"https://maps.googleapis.com/maps/api/geocode/json?address={urllib.parse.quote(address)}&key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8"
@@ -2356,9 +2338,9 @@ if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5000))
     print("="*60)
-    print("⚡ SAKIL BHAI - USER PANEL v9.0 PREMIUM")
+    print("⚡ SAKIL BHAI - USER PANEL v8.0")
     print("🔥 CYBERPUNK EDITION · PREMIUM SYSTEM")
-    print("📍 CIRCULAR MAP VIEW WITH RED BORDER")
+    print("📍 PERFECT LOCATION TRACKING - RED BORDER")
     print("="*60)
     print(f"✅ User Panel:  http://0.0.0.0:{port}")
     print(f"✅ Login:       http://0.0.0.0:{port}/login")
