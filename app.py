@@ -499,7 +499,7 @@ LOGIN_HTML = '''
 '''
 
 # ============================================
-# USER DASHBOARD - PERFECT LOCATION WITH BORDER (UPDATED)
+# USER DASHBOARD - PERFECT LOCATION WITH BORDER
 # ============================================
 USER_PANEL_HTML = '''
 <!DOCTYPE html>
@@ -1299,7 +1299,7 @@ USER_PANEL_HTML = '''
             return null;
         }
         
-        // মেসি ফরম্যাট ক্লিন করি: "!!.INARAYANPUR North 24 Parganas!!NORTH 24 PARGANAS!!North 24 Parganas!!West Bengal!!743234"
+        // Clean messy format: "!!.INARAYANPUR North 24 Parganas!!NORTH 24 PARGANAS!!North 24 Parganas!!West Bengal!!743234"
         let cleaned = address.replace(/!!\.?/g, '').replace(/!!/g, '!');
         let parts = cleaned.split('!').filter(p => p.trim().length > 0);
         
@@ -1353,7 +1353,6 @@ USER_PANEL_HTML = '''
         // 🔥 ক্রিটিক্যাল চেঞ্জ: place এর বদলে search ব্যবহার করি, zoom 13 (পুরো এলাকা দেখাবে)
         let query = areaName;
         if (lat && lng) {
-            // ল্যাট/লং থাকলেও zoom 13 দিয়ে পুরো এলাকা দেখাই
             query = `${lat},${lng}`;
         }
 
@@ -1440,7 +1439,7 @@ USER_PANEL_HTML = '''
             const hasLatLng = (info.lat && info.lng);
             const locationType = hasLatLng ? 'live' : 'area';
             const locationIcon = hasLatLng ? 'fa-satellite-dish' : 'fa-map-pin';
-            const locationColor = '#ff0000'; // সবসময় রেড
+            const locationColor = '#ff0000';
             const locationClass = hasLatLng ? 'live' : 'area';
             
             html += `<div class="result-item location-item ${locationClass}">
@@ -1563,7 +1562,6 @@ USER_PANEL_HTML = '''
     });
     document.addEventListener('dragstart', function(e) { e.preventDefault(); return false; });
 
-    // ✅ পেজ লোড হলে আর অটো সার্চ হবে না
     document.addEventListener('DOMContentLoaded', function() {
         console.log('🔥 SAKIL BHAI SYSTEM READY');
         console.log('📱 Enter a 10-digit number and click search');
