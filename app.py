@@ -3,7 +3,7 @@
 
 """
 ============================================
-SAKIL BHAI - RESELLER SYSTEM v10.1 VIP ULTIMATE
+SAKIL BHAI - RESELLER SYSTEM v9.2 VIP
 🔥 FULL ADMIN CONTROL · RESELLER + USER CREATE
 📍 PERFECT LOCATION TRACKING WITH RED BORDER
 ============================================
@@ -245,8 +245,14 @@ def session_required(f):
                 if is_expired(reseller_expiry):
                     session.clear()
                     return redirect('https://wa.me/919242428894')
-            else:
+            elif role == "admin":
                 if is_expired():
+                    session.clear()
+                    return redirect('https://wa.me/919242428894')
+            else:
+                # Normal user (sub-user)
+                user_expiry = session.get("user_expiry")
+                if is_expired(user_expiry):
                     session.clear()
                     return redirect('https://wa.me/919242428894')
             return f(*args, **kwargs)
@@ -372,7 +378,7 @@ LOGIN_HTML = '''
 '''
 
 # ============================================
-# USER PANEL HTML (FULL)
+# USER PANEL HTML (FULL - SAME AS BEFORE)
 # ============================================
 USER_PANEL_HTML = '''
 <!DOCTYPE html>
@@ -739,7 +745,7 @@ USER_PANEL_HTML = '''
 '''
 
 # ============================================
-# RESELLER PANEL HTML (FULL)
+# RESELLER PANEL HTML
 # ============================================
 RESELLER_PANEL_HTML = '''
 <!DOCTYPE html>
@@ -913,7 +919,7 @@ RESELLER_PANEL_HTML = '''
 '''
 
 # ============================================
-# ADMIN DASHBOARD HTML (FULL)
+# ADMIN DASHBOARD - FULL MONITORING + RESELLER + USER CREATE
 # ============================================
 ADMIN_DASHBOARD_HTML = '''
 <!DOCTYPE html>
@@ -1034,7 +1040,7 @@ ADMIN_DASHBOARD_HTML = '''
             <div id="expiryMsg" style="margin-top:8px; font-size:9px; color:#88ddff;"></div>
         </div>
 
-        <!-- CREATE RESELLER & CREATE USER -->
+        <!-- CREATE RESELLER -->
         <div class="card">
             <div class="card-title"><i class="fas fa-user-plus"></i> create reseller</div>
             <form method="POST" action="{{ url_for('admin_add_reseller') }}" class="add-form">
@@ -1047,10 +1053,11 @@ ADMIN_DASHBOARD_HTML = '''
                 </select>
                 <button type="submit" class="btn-add"><i class="fas fa-plus"></i> create reseller</button>
             </form>
+        </div>
 
-            <div class="form-divider"></div>
-
-            <div class="card-title" style="margin-top:4px;"><i class="fas fa-user"></i> create user (sub-user)</div>
+        <!-- CREATE USER (SUB-USER) -->
+        <div class="card">
+            <div class="card-title"><i class="fas fa-user"></i> create user (sub-user)</div>
             <div style="font-size:7px; font-family:'Orbitron',monospace; color:#88ddff; margin-bottom:8px; letter-spacing:1px;">
                 <i class="fas fa-info-circle"></i> Select which reseller this user belongs to
             </div>
@@ -1068,7 +1075,7 @@ ADMIN_DASHBOARD_HTML = '''
             </form>
         </div>
 
-        <!-- Reseller List -->
+        <!-- Reseller List with Full Monitoring -->
         <div class="card">
             <div class="card-title"><i class="fas fa-store"></i> reseller list & monitoring</div>
             <div class="table-wrap">
@@ -1103,6 +1110,7 @@ ADMIN_DASHBOARD_HTML = '''
                                 <div class="actions-cell">
                                     <a href="{{ url_for('admin_toggle_reseller', username=username) }}"><i class="fas fa-{% if data.active %}pause{% else %}play{% endif %}"></i></a>
                                     <a href="{{ url_for('admin_reseller_users', username=username) }}"><i class="fas fa-users"></i></a>
+                                    <a href="{{ url_for('admin_edit_reseller', username=username) }}"><i class="fas fa-edit"></i></a>
                                     {% if not data.is_super %}
                                     <a href="{{ url_for('admin_delete_reseller', username=username) }}" class="del" onclick="return confirm('delete reseller {{ username }}?')"><i class="fas fa-trash"></i></a>
                                     {% endif %}
@@ -1120,7 +1128,7 @@ ADMIN_DASHBOARD_HTML = '''
 
         <!-- All Sub-Users List with Admin Actions -->
         <div class="card">
-            <div class="card-title"><i class="fas fa-users"></i> all sub-users (global) <span style="font-size:7px; color:#ffd700;">— admin can toggle/delete</span></div>
+            <div class="card-title"><i class="fas fa-users"></i> all sub-users (global) <span style="font-size:7px; color:#ffd700;">— admin can toggle/delete/edit</span></div>
             <div class="table-wrap">
                 {% if all_subusers %}
                 <table>
@@ -1147,6 +1155,7 @@ ADMIN_DASHBOARD_HTML = '''
                             <td>
                                 <div class="actions-cell">
                                     <a href="{{ url_for('admin_toggle_user', reseller=item.reseller, subuser=item.username) }}"><i class="fas fa-{% if item.active %}pause{% else %}play{% endif %}"></i></a>
+                                    <a href="{{ url_for('admin_edit_user', reseller=item.reseller, subuser=item.username) }}"><i class="fas fa-edit"></i></a>
                                     <a href="{{ url_for('admin_delete_user', reseller=item.reseller, subuser=item.username) }}" class="del" onclick="return confirm('delete {{ item.username }}?')"><i class="fas fa-trash"></i></a>
                                 </div>
                             </td>
@@ -1283,56 +1292,76 @@ def login_page():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
+
         users = get_users()
-        if verify_user(username, password, users):
-            role = users[username].get("role", "user")
-            is_super = users[username].get("is_super", False)
-            if role == "admin":
-                if is_expired():
-                    return redirect('https://wa.me/919242428894')
-                session["authenticated"] = True
-                session["username"] = username
-                session["role"] = role
-                session["is_super"] = is_super
-                users[username]["last_login"] = datetime.datetime.utcnow().isoformat()
-                save_users(users)
-                if is_super:
-                    return redirect(url_for('admin_dashboard'))
-                else:
-                    return redirect(url_for('user_dashboard'))
-            elif role == "reseller":
-                reseller_data = get_reseller_data()
-                reseller_expiry = reseller_data.get(username, {}).get("expiry", "")
-                if is_expired(reseller_expiry):
-                    return redirect('https://wa.me/919242428894')
-                session["authenticated"] = True
-                session["username"] = username
-                session["role"] = role
-                session["reseller_expiry"] = reseller_expiry
-                users[username]["last_login"] = datetime.datetime.utcnow().isoformat()
-                save_users(users)
+        
+        # First verify user credentials
+        if not verify_user(username, password, users):
+            # Invalid credentials - show error
+            remaining_seconds = get_remaining_seconds()
+            remaining_minutes = max(0, remaining_seconds // 60)
+            return render_template_string(LOGIN_HTML, error="Invalid username or password!", remaining_minutes=remaining_minutes)
+        
+        # Credentials are valid, now check role and expiry
+        role = users[username].get("role", "user")
+        is_super = users[username].get("is_super", False)
+
+        if role == "admin":
+            if is_expired():
+                remaining_seconds = get_remaining_seconds()
+                remaining_minutes = max(0, remaining_seconds // 60)
+                return render_template_string(LOGIN_HTML, error="System expired! Please contact admin.", remaining_minutes=remaining_minutes)
+            session["authenticated"] = True
+            session["username"] = username
+            session["role"] = role
+            session["is_super"] = is_super
+            users[username]["last_login"] = datetime.datetime.utcnow().isoformat()
+            save_users(users)
+            if is_super:
+                return redirect(url_for('admin_dashboard'))
+            else:
+                return redirect(url_for('user_dashboard'))
+
+        elif role == "reseller":
+            reseller_data = get_reseller_data()
+            reseller_expiry = reseller_data.get(username, {}).get("expiry", "")
+            if is_expired(reseller_expiry):
+                remaining_seconds = get_remaining_seconds()
+                remaining_minutes = max(0, remaining_seconds // 60)
+                return render_template_string(LOGIN_HTML, error="Your subscription has expired! Please contact admin.", remaining_minutes=remaining_minutes)
+            session["authenticated"] = True
+            session["username"] = username
+            session["role"] = role
+            session["reseller_expiry"] = reseller_expiry
+            users[username]["last_login"] = datetime.datetime.utcnow().isoformat()
+            save_users(users)
+            return redirect(url_for('user_dashboard'))
+
+        else:
+            # Normal user (sub-user)
+            reseller_data = get_reseller_data()
+            found = False
+            for reseller, data in reseller_data.items():
+                if username in data.get("users", {}):
+                    user_data = data["users"][username]
+                    if is_expired(user_data.get("expiry", "")):
+                        remaining_seconds = get_remaining_seconds()
+                        remaining_minutes = max(0, remaining_seconds // 60)
+                        return render_template_string(LOGIN_HTML, error="Your subscription has expired! Please contact your reseller.", remaining_minutes=remaining_minutes)
+                    session["authenticated"] = True
+                    session["username"] = username
+                    session["role"] = "user"
+                    session["reseller"] = reseller
+                    session["user_expiry"] = user_data.get("expiry", "")
+                    found = True
+                    break
+            if found:
                 return redirect(url_for('user_dashboard'))
             else:
-                reseller_data = get_reseller_data()
-                found = False
-                for reseller, data in reseller_data.items():
-                    if username in data.get("users", {}):
-                        user_data = data["users"][username]
-                        if is_expired(user_data.get("expiry", "")):
-                            return redirect('https://wa.me/919242428894')
-                        session["authenticated"] = True
-                        session["username"] = username
-                        session["role"] = "user"
-                        session["reseller"] = reseller
-                        session["user_expiry"] = user_data.get("expiry", "")
-                        found = True
-                        break
-                if found:
-                    return redirect(url_for('user_dashboard'))
-                else:
-                    return redirect('https://wa.me/919242428894')
-        else:
-            return redirect('https://wa.me/919242428894')
+                remaining_seconds = get_remaining_seconds()
+                remaining_minutes = max(0, remaining_seconds // 60)
+                return render_template_string(LOGIN_HTML, error="User not found under any reseller!", remaining_minutes=remaining_minutes)
+
     remaining_seconds = get_remaining_seconds()
     remaining_minutes = max(0, remaining_seconds // 60)
     return render_template_string(LOGIN_HTML, error="", remaining_minutes=remaining_minutes)
@@ -1347,14 +1376,18 @@ def logout():
 def user_dashboard():
     username = session.get("username")
     role = session.get("role")
+    
+    # Get branding
     brand_name = "SAKIL BHAI"
     logo_url = "https://i.postimg.cc/1VBJWPhR/IMG-20260724-232723-958.webp"
+    
     if role == "reseller":
         branding = get_reseller_branding(username)
         brand_name = branding.get("brand_name", username.upper())
         logo_url = branding.get("logo_url", "https://i.postimg.cc/1VBJWPhR/IMG-20260724-232723-958.webp")
         remaining = get_remaining_seconds(session.get("reseller_expiry"))
     elif role == "user":
+        # Sub-user - get from reseller
         reseller = session.get("reseller")
         if reseller:
             branding = get_reseller_branding(reseller)
@@ -1363,7 +1396,12 @@ def user_dashboard():
         remaining = get_remaining_seconds(session.get("user_expiry"))
     else:
         remaining = get_remaining_seconds()
-    return render_template_string(USER_PANEL_HTML, brand_name=brand_name, logo_url=logo_url, remaining_seconds=remaining, max_seconds=3600)
+    
+    return render_template_string(USER_PANEL_HTML,
+                                 brand_name=brand_name,
+                                 logo_url=logo_url,
+                                 remaining_seconds=remaining,
+                                 max_seconds=3600)
 
 # ============================================
 # RESELLER ROUTES
@@ -1375,21 +1413,42 @@ def reseller_dashboard(username):
     if session.get("username") != username or session.get("role") != "reseller":
         flash("Access denied!", "error")
         return redirect(url_for('user_dashboard'))
+    
     branding = get_reseller_branding(username)
     brand_name = branding.get("brand_name", username.upper())
     logo_url = branding.get("logo_url", "https://i.postimg.cc/1VBJWPhR/IMG-20260724-232723-958.webp")
+    
     users = get_reseller_users(username)
     total = len(users)
     active = sum(1 for u in users.values() if u.get("active", True))
     inactive = total - active
+    
     reseller_expiry = session.get("reseller_expiry")
     expiry_days = max(0, get_remaining_seconds(reseller_expiry) // 86400)
-    stats = {"total_users": total, "active_users": active, "inactive_users": inactive, "expiry_days": expiry_days}
+    
+    stats = {
+        "total_users": total,
+        "active_users": active,
+        "inactive_users": inactive,
+        "expiry_days": expiry_days
+    }
+    
     default_expiry = datetime.datetime.utcnow() + datetime.timedelta(days=30)
     default_expiry_local = default_expiry.strftime('%Y-%m-%dT%H:%M')
+    
     base_url = request.host_url.rstrip('/')
     reseller_url = f"{base_url}/reseller/{username}"
-    return render_template_string(RESELLER_PANEL_HTML, brand_name=brand_name, logo_url=logo_url, users=users, stats=stats, branding=branding, default_expiry_local=default_expiry_local, reseller_url=reseller_url, expiry_days=expiry_days, is_expired=is_expired)
+    
+    return render_template_string(RESELLER_PANEL_HTML,
+                                 brand_name=brand_name,
+                                 logo_url=logo_url,
+                                 users=users,
+                                 stats=stats,
+                                 branding=branding,
+                                 default_expiry_local=default_expiry_local,
+                                 reseller_url=reseller_url,
+                                 expiry_days=expiry_days,
+                                 is_expired=is_expired)
 
 @app.route('/reseller/<username>/admin')
 @session_required
@@ -1405,17 +1464,21 @@ def reseller_update_branding(username):
     if session.get("username") != username or session.get("role") != "reseller":
         flash("Access denied!", "error")
         return redirect(url_for('user_dashboard'))
+    
     brand_name = request.form.get('brand_name', '').strip()
     logo_url = request.form.get('logo_url', '').strip()
+    
     data = get_reseller_data()
     if username not in data:
         data[username] = {"branding": {}, "users": {}}
     data[username]["branding"]["brand_name"] = brand_name or username.upper()
     data[username]["branding"]["logo_url"] = logo_url or "https://i.postimg.cc/1VBJWPhR/IMG-20260724-232723-958.webp"
+    
     if save_reseller_data(data):
         flash("Branding updated successfully!", "success")
     else:
         flash("Error updating branding!", "error")
+    
     return redirect(url_for('reseller_dashboard', username=username))
 
 @app.route('/reseller/<username>/add-user', methods=['POST'])
@@ -1424,20 +1487,27 @@ def reseller_add_user(username):
     if session.get("username") != username or session.get("role") != "reseller":
         flash("Access denied!", "error")
         return redirect(url_for('user_dashboard'))
+    
     subuser = request.form.get('username', '').strip()
     password = request.form.get('password', '')
     expiry_str = request.form.get('expiry', '')
+    
     if not subuser or not password:
         flash("Username and password required!", "error")
         return redirect(url_for('reseller_dashboard', username=username))
+    
+    # Check if subuser already exists
     users = get_reseller_users(username)
     if subuser in users:
         flash("Username already exists!", "error")
         return redirect(url_for('reseller_dashboard', username=username))
+    
+    # Check expiry against reseller's expiry
     reseller_expiry = session.get("reseller_expiry")
     if expiry_str:
         try:
             user_expiry = datetime.datetime.fromisoformat(expiry_str.replace('Z', '+00:00'))
+            # If reseller expiry exists, user expiry must be before it
             if reseller_expiry:
                 reseller_dt = datetime.datetime.fromisoformat(reseller_expiry.replace('Z', '+00:00'))
                 if user_expiry > reseller_dt:
@@ -1448,13 +1518,22 @@ def reseller_add_user(username):
             flash("Invalid expiry format!", "error")
             return redirect(url_for('reseller_dashboard', username=username))
     else:
+        # Default 30 days
         default_expiry = datetime.datetime.utcnow() + datetime.timedelta(days=30)
         expiry_utc = default_expiry.strftime('%Y-%m-%dT%H:%M:%S+00:00')
-    user_data = {"password": hashlib.sha256(password.encode()).hexdigest(), "active": True, "created": datetime.datetime.utcnow().isoformat(), "expiry": expiry_utc}
+    
+    user_data = {
+        "password": hashlib.sha256(password.encode()).hexdigest(),
+        "active": True,
+        "created": datetime.datetime.utcnow().isoformat(),
+        "expiry": expiry_utc
+    }
+    
     if save_reseller_user(username, subuser, user_data):
         flash(f"User '{subuser}' created successfully!", "success")
     else:
         flash("Error creating user!", "error")
+    
     return redirect(url_for('reseller_dashboard', username=username))
 
 @app.route('/reseller/<username>/toggle/<subuser>')
@@ -1463,10 +1542,12 @@ def reseller_toggle_user(username, subuser):
     if session.get("username") != username or session.get("role") != "reseller":
         flash("Access denied!", "error")
         return redirect(url_for('user_dashboard'))
+    
     if toggle_reseller_user(username, subuser):
         flash(f"User '{subuser}' toggled!", "success")
     else:
         flash("Error toggling user!", "error")
+    
     return redirect(url_for('reseller_dashboard', username=username))
 
 @app.route('/reseller/<username>/delete/<subuser>')
@@ -1475,10 +1556,12 @@ def reseller_delete_user(username, subuser):
     if session.get("username") != username or session.get("role") != "reseller":
         flash("Access denied!", "error")
         return redirect(url_for('user_dashboard'))
+    
     if delete_reseller_user(username, subuser):
         flash(f"User '{subuser}' deleted!", "success")
     else:
         flash("Error deleting user!", "error")
+    
     return redirect(url_for('reseller_dashboard', username=username))
 
 @app.route('/reseller/logout')
@@ -1487,45 +1570,61 @@ def reseller_logout():
     return redirect(url_for('login_page'))
 
 # ============================================
-# ADMIN ROUTES
+# ADMIN ROUTES - FULL MONITORING
 # ============================================
 
 @app.route('/admin', methods=['GET', 'POST'])
 def admin_login():
     if session.get("admin_auth"):
         return redirect(url_for('admin_dashboard'))
+
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
+
         settings = get_settings()
         admin_user = settings.get("admin_username", "sakil2026")
         admin_pass_hash = settings.get("admin_password", hashlib.sha256("sakil2026".encode()).hexdigest())
+
         if username == admin_user and hashlib.sha256(password.encode()).hexdigest() == admin_pass_hash:
             session["admin_auth"] = True
             return redirect(url_for('admin_dashboard'))
         else:
             return render_template_string(ADMIN_LOGIN_HTML, error="invalid admin credentials")
+
     return render_template_string(ADMIN_LOGIN_HTML, error="")
 
 @app.route('/admin/dashboard')
 def admin_dashboard():
     if not session.get("admin_auth"):
         return redirect(url_for('admin_login'))
+
     users = get_users()
     reseller_data = get_reseller_data()
+    
+    # Separate resellers and normal users
     resellers = {}
+    normal_users = {}
     total_subusers = 0
+    
     for username, data in users.items():
         if data.get("role") == "reseller":
             resellers[username] = data
+            # Get sub-user count
             subusers = reseller_data.get(username, {}).get("users", {})
             resellers[username]["subuser_count"] = len(subusers)
             resellers[username]["reseller_expiry"] = reseller_data.get(username, {}).get("expiry", "")
             total_subusers += len(subusers)
+        else:
+            normal_users[username] = data
+    
     total_resellers = len(resellers)
     inactive_resellers = sum(1 for u in resellers.values() if not u.get("active", True))
+    
     remaining = get_remaining_seconds()
     expiry_status = "active" if remaining > 0 else "expired"
+    
+    # Get all sub-users for global monitoring
     all_subusers = []
     for reseller, data in reseller_data.items():
         for subuser, subdata in data.get("users", {}).items():
@@ -1536,6 +1635,7 @@ def admin_dashboard():
                 "expiry": subdata.get("expiry", ""),
                 "created": subdata.get("created", "")
             })
+    
     settings = get_settings()
     expiry_utc = settings.get("expiry_utc", "")
     if expiry_utc:
@@ -1546,8 +1646,10 @@ def admin_dashboard():
             expiry_local = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M')
     else:
         expiry_local = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M')
+    
     default_expiry = datetime.datetime.utcnow() + datetime.timedelta(days=30)
     default_expiry_local = default_expiry.strftime('%Y-%m-%dT%H:%M')
+
     stats = {
         "total_users": len(users),
         "total_resellers": total_resellers,
@@ -1555,9 +1657,12 @@ def admin_dashboard():
         "inactive_resellers": inactive_resellers,
         "expiry_status": expiry_status
     }
+    
     reseller_list = list(resellers.keys())
+
     return render_template_string(ADMIN_DASHBOARD_HTML,
                                  resellers=resellers,
+                                 normal_users=normal_users,
                                  all_subusers=all_subusers,
                                  stats=stats,
                                  remaining=remaining,
@@ -1570,10 +1675,12 @@ def admin_dashboard():
 def admin_set_expiry():
     if not session.get("admin_auth"):
         return jsonify({"status": "error", "message": "unauthorized"}), 401
+
     data = request.get_json()
     expiry_str = data.get('expiry', '')
     if not expiry_str:
         return jsonify({"status": "error", "message": "expiry required"}), 400
+
     try:
         dt = datetime.datetime.fromisoformat(expiry_str.replace('Z', '+00:00'))
         expiry_utc = dt.strftime('%Y-%m-%dT%H:%M:%S+00:00')
@@ -1582,7 +1689,12 @@ def admin_set_expiry():
         if save_settings(settings):
             remaining = get_remaining_seconds()
             status = "active" if remaining > 0 else "expired"
-            return jsonify({"status": "success", "expiry_utc": expiry_utc, "remaining": remaining, "expiry_status": status})
+            return jsonify({
+                "status": "success",
+                "expiry_utc": expiry_utc,
+                "remaining": remaining,
+                "expiry_status": status
+            })
         else:
             return jsonify({"status": "error", "message": "failed to save"}), 500
     except Exception as e:
@@ -1592,17 +1704,22 @@ def admin_set_expiry():
 def admin_add_reseller():
     if not session.get("admin_auth"):
         return redirect(url_for('admin_login'))
+
     username = request.form.get('username', '').strip()
     password = request.form.get('password', '')
     expiry_str = request.form.get('expiry', '')
     status = request.form.get('status', 'active')
+
     if not username or not password:
         flash("Username and password required!", "error")
         return redirect(url_for('admin_dashboard'))
+
     users = get_users()
     if username in users:
         flash("Username already exists!", "error")
         return redirect(url_for('admin_dashboard'))
+
+    # Create reseller user
     users[username] = {
         "password": hashlib.sha256(password.encode()).hexdigest(),
         "role": "reseller",
@@ -1612,6 +1729,8 @@ def admin_add_reseller():
         "display_name": username.upper()
     }
     save_users(users)
+
+    # Create reseller data
     reseller_data = get_reseller_data()
     if expiry_str:
         try:
@@ -1621,115 +1740,65 @@ def admin_add_reseller():
             expiry_utc = (datetime.datetime.utcnow() + datetime.timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%S+00:00')
     else:
         expiry_utc = (datetime.datetime.utcnow() + datetime.timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%S+00:00')
+    
     reseller_data[username] = {
-        "branding": {"brand_name": username.upper(), "logo_url": "https://i.postimg.cc/1VBJWPhR/IMG-20260724-232723-958.webp"},
+        "branding": {
+            "brand_name": username.upper(),
+            "logo_url": "https://i.postimg.cc/1VBJWPhR/IMG-20260724-232723-958.webp"
+        },
         "users": {},
         "expiry": expiry_utc
     }
     save_reseller_data(reseller_data)
+
     flash(f"Reseller '{username}' created successfully!", "success")
-    return redirect(url_for('admin_dashboard'))
-
-@app.route('/admin/add-user', methods=['POST'])
-def admin_add_user():
-    if not session.get("admin_auth"):
-        return redirect(url_for('admin_login'))
-    reseller = request.form.get('reseller', '').strip()
-    username = request.form.get('username', '').strip()
-    password = request.form.get('password', '')
-    expiry_str = request.form.get('expiry', '')
-    if not reseller or not username or not password:
-        flash("Reseller, username and password required!", "error")
-        return redirect(url_for('admin_dashboard'))
-    reseller_data = get_reseller_data()
-    if reseller not in reseller_data:
-        flash("Reseller not found!", "error")
-        return redirect(url_for('admin_dashboard'))
-    if username in reseller_data[reseller].get("users", {}):
-        flash(f"User '{username}' already exists under '{reseller}'!", "error")
-        return redirect(url_for('admin_dashboard'))
-    reseller_expiry = reseller_data[reseller].get("expiry", "")
-    if expiry_str:
-        try:
-            user_expiry = datetime.datetime.fromisoformat(expiry_str.replace('Z', '+00:00'))
-            if reseller_expiry:
-                reseller_dt = datetime.datetime.fromisoformat(reseller_expiry.replace('Z', '+00:00'))
-                if user_expiry > reseller_dt:
-                    flash("User expiry cannot exceed reseller's subscription expiry!", "error")
-                    return redirect(url_for('admin_dashboard'))
-            expiry_utc = user_expiry.strftime('%Y-%m-%dT%H:%M:%S+00:00')
-        except:
-            flash("Invalid expiry format!", "error")
-            return redirect(url_for('admin_dashboard'))
-    else:
-        default_expiry = datetime.datetime.utcnow() + datetime.timedelta(days=30)
-        expiry_utc = default_expiry.strftime('%Y-%m-%dT%H:%M:%S+00:00')
-    user_data = {
-        "password": hashlib.sha256(password.encode()).hexdigest(),
-        "active": True,
-        "created": datetime.datetime.utcnow().isoformat(),
-        "expiry": expiry_utc
-    }
-    if save_reseller_user(reseller, username, user_data):
-        flash(f"User '{username}' created successfully under '{reseller}'!", "success")
-    else:
-        flash("Error creating user!", "error")
-    return redirect(url_for('admin_dashboard'))
-
-@app.route('/admin/toggle-user/<reseller>/<subuser>')
-def admin_toggle_user(reseller, subuser):
-    if not session.get("admin_auth"):
-        return redirect(url_for('admin_login'))
-    if toggle_reseller_user(reseller, subuser):
-        flash(f"User '{subuser}' toggled!", "success")
-    else:
-        flash("Error toggling user!", "error")
-    return redirect(url_for('admin_dashboard'))
-
-@app.route('/admin/delete-user/<reseller>/<subuser>')
-def admin_delete_user(reseller, subuser):
-    if not session.get("admin_auth"):
-        return redirect(url_for('admin_login'))
-    if delete_reseller_user(reseller, subuser):
-        flash(f"User '{subuser}' deleted!", "success")
-    else:
-        flash("Error deleting user!", "error")
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/toggle-reseller/<username>')
 def admin_toggle_reseller(username):
     if not session.get("admin_auth"):
         return redirect(url_for('admin_login'))
+
     if username == "sakil2026":
         flash("Cannot toggle super admin!", "error")
         return redirect(url_for('admin_dashboard'))
+
     users = get_users()
     if username not in users:
         flash("Reseller not found!", "error")
         return redirect(url_for('admin_dashboard'))
+
     users[username]["active"] = not users[username].get("active", True)
     save_users(users)
     status = "enabled" if users[username]["active"] else "disabled"
     flash(f"Reseller {status}!", "success")
+
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/delete-reseller/<username>')
 def admin_delete_reseller(username):
     if not session.get("admin_auth"):
         return redirect(url_for('admin_login'))
+
     if username == "sakil2026":
         flash("Cannot delete super admin!", "error")
         return redirect(url_for('admin_dashboard'))
+
     users = get_users()
     if username not in users:
         flash("Reseller not found!", "error")
         return redirect(url_for('admin_dashboard'))
+
+    # Delete from reseller_data
     reseller_data = get_reseller_data()
     if username in reseller_data:
         del reseller_data[username]
         save_reseller_data(reseller_data)
+
+    # Delete from users
     del users[username]
     save_users(users)
+
     flash(f"Reseller '{username}' deleted!", "success")
     return redirect(url_for('admin_dashboard'))
 
@@ -1737,10 +1806,12 @@ def admin_delete_reseller(username):
 def admin_reseller_users(username):
     if not session.get("admin_auth"):
         return redirect(url_for('admin_login'))
+
     reseller_data = get_reseller_data()
     users_data = reseller_data.get(username, {}).get("users", {})
     branding = reseller_data.get(username, {}).get("branding", {})
     brand_name = branding.get("brand_name", username.upper())
+
     html = f'''
     <!DOCTYPE html>
     <html><head><title>{brand_name} · Users</title>
@@ -1787,6 +1858,7 @@ def admin_reseller_users(username):
             '''
     else:
         html += '<tr><td colspan="4" class="empty"><i class="fas fa-user-slash"></i> no users</td></tr>'
+    
     html += f'''
             </tbody>
         </table>
@@ -1803,6 +1875,335 @@ def admin_logout():
     return redirect(url_for('admin_login'))
 
 # ============================================
+# ADMIN EDIT RESELLER
+# ============================================
+
+@app.route('/admin/edit-reseller/<username>', methods=['GET', 'POST'])
+def admin_edit_reseller(username):
+    if not session.get("admin_auth"):
+        return redirect(url_for('admin_login'))
+    
+    if username == "sakil2026":
+        flash("Cannot edit super admin!", "error")
+        return redirect(url_for('admin_dashboard'))
+    
+    users = get_users()
+    if username not in users:
+        flash("Reseller not found!", "error")
+        return redirect(url_for('admin_dashboard'))
+    
+    reseller_data = get_reseller_data()
+    reseller_info = reseller_data.get(username, {})
+    
+    if request.method == 'POST':
+        new_password = request.form.get('password', '').strip()
+        new_expiry = request.form.get('expiry', '')
+        new_status = request.form.get('status', 'active')
+        
+        # Update password if provided
+        if new_password:
+            users[username]["password"] = hashlib.sha256(new_password.encode()).hexdigest()
+        
+        # Update status
+        users[username]["active"] = new_status == "active"
+        
+        # Update expiry
+        if new_expiry:
+            try:
+                dt = datetime.datetime.fromisoformat(new_expiry.replace('Z', '+00:00'))
+                expiry_utc = dt.strftime('%Y-%m-%dT%H:%M:%S+00:00')
+                reseller_data[username]["expiry"] = expiry_utc
+            except:
+                flash("Invalid expiry format!", "error")
+                return redirect(url_for('admin_edit_reseller', username=username))
+        
+        save_users(users)
+        save_reseller_data(reseller_data)
+        flash(f"Reseller '{username}' updated successfully!", "success")
+        return redirect(url_for('admin_dashboard'))
+    
+    # GET request - show edit form
+    current_expiry = reseller_info.get("expiry", "")
+    if current_expiry:
+        try:
+            dt = datetime.datetime.fromisoformat(current_expiry.replace('Z', '+00:00'))
+            expiry_local = dt.strftime('%Y-%m-%dT%H:%M')
+        except:
+            expiry_local = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M')
+    else:
+        expiry_local = (datetime.datetime.utcnow() + datetime.timedelta(days=30)).strftime('%Y-%m-%dT%H:%M')
+    
+    html = f'''
+    <!DOCTYPE html>
+    <html><head><title>Edit Reseller · {username}</title>
+    <style>
+        *{{margin:0;padding:0;box-sizing:border-box;}}
+        body{{background:#06060a;display:flex;justify-content:center;padding:30px;font-family:'Inter',sans-serif;}}
+        .box{{background:rgba(6,6,12,0.95);border:1px solid rgba(255,215,0,0.1);border-radius:20px;padding:30px;max-width:450px;width:100%;}}
+        h1{{font-family:'Orbitron',monospace;font-size:18px;font-weight:700;color:#fff;letter-spacing:2px;text-align:center;}}
+        h1 .hl{{color:#ffd700;}}
+        .sub{{text-align:center;font-size:8px;font-family:'Orbitron',monospace;color:#88ddff;letter-spacing:3px;margin-bottom:16px;}}
+        .back{{display:inline-block;font-size:8px;font-family:'Orbitron',monospace;color:#88ddff;text-decoration:none;margin-bottom:14px;letter-spacing:2px;}}
+        .back:hover{{color:#ffd700;}}
+        .form-group{{margin-bottom:12px;}}
+        label{{display:block;font-size:8px;font-family:'Orbitron',monospace;color:#88ddff;letter-spacing:2px;margin-bottom:3px;}}
+        input,select{{width:100%;padding:8px 12px;background:rgba(0,0,0,0.2);border:1px solid rgba(0,255,255,0.05);border-radius:8px;color:#fff;font-size:13px;outline:none;font-family:'Inter',sans-serif;}}
+        input:focus,select:focus{{border-color:rgba(255,215,0,0.15);}}
+        select option{{background:#0a0a1a;color:#fff;}}
+        .btn{{width:100%;padding:10px;background:rgba(255,215,0,0.05);border:1px solid rgba(255,215,0,0.1);border-radius:8px;color:#88ddff;font-family:'Orbitron',monospace;font-size:10px;letter-spacing:2px;cursor:pointer;transition:all 0.3s ease;margin-top:4px;}}
+        .btn:hover{{border-color:rgba(255,215,0,0.3);color:#ffd700;}}
+        .footer{{text-align:center;font-size:6px;color:#88ddff;letter-spacing:3px;margin-top:12px;font-family:'Orbitron',monospace;}}
+        .flash{{padding:8px 14px;border-radius:8px;margin-bottom:12px;font-size:10px;font-family:'Orbitron',monospace;letter-spacing:1px;display:flex;align-items:center;gap:8px;}}
+        .flash.success{{background:rgba(0,255,102,0.02);border:1px solid rgba(0,255,102,0.05);color:#00ff66;}}
+        .flash.error{{background:rgba(255,51,85,0.02);border:1px solid rgba(255,51,85,0.05);color:#ff3355;}}
+    </style>
+    </head>
+    <body>
+    <div class="box">
+        <h1><span class="hl">Edit</span> Reseller</h1>
+        <div class="sub">premium · {username}</div>
+        <a href="{url_for('admin_dashboard')}" class="back"><i class="fas fa-arrow-left"></i> back</a>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="flash {{ category }}"><i class="fas fa-{'check-circle' if category == 'success' else 'exclamation-circle'}"></i> {{ message }}</div>
+            {% endfor %}
+        {% endwith %}
+        
+        <form method="POST">
+            <div class="form-group">
+                <label><i class="fas fa-key"></i> new password (optional)</label>
+                <input type="password" name="password" placeholder="Leave blank to keep current">
+            </div>
+            <div class="form-group">
+                <label><i class="fas fa-calendar"></i> expiry</label>
+                <input type="datetime-local" name="expiry" value="{expiry_local}">
+            </div>
+            <div class="form-group">
+                <label><i class="fas fa-circle"></i> status</label>
+                <select name="status">
+                    <option value="active" {'selected' if users[username].get('active', True) else ''}>active</option>
+                    <option value="inactive" {'selected' if not users[username].get('active', True) else ''}>inactive</option>
+                </select>
+            </div>
+            <button type="submit" class="btn"><i class="fas fa-save"></i> update reseller</button>
+        </form>
+        <div class="footer">⚡ {brand_name} · reseller system ⚡</div>
+    </div>
+    </body>
+    </html>
+    '''
+    return html
+
+# ============================================
+# ADMIN ADD USER (SUB-USER)
+# ============================================
+
+@app.route('/admin/add-user', methods=['POST'])
+def admin_add_user():
+    if not session.get("admin_auth"):
+        return redirect(url_for('admin_login'))
+    
+    reseller = request.form.get('reseller', '').strip()
+    username = request.form.get('username', '').strip()
+    password = request.form.get('password', '')
+    expiry_str = request.form.get('expiry', '')
+    
+    if not reseller or not username or not password:
+        flash("Reseller, username and password required!", "error")
+        return redirect(url_for('admin_dashboard'))
+    
+    reseller_data = get_reseller_data()
+    if reseller not in reseller_data:
+        flash("Reseller not found!", "error")
+        return redirect(url_for('admin_dashboard'))
+    
+    if username in reseller_data[reseller].get("users", {}):
+        flash(f"User '{username}' already exists under '{reseller}'!", "error")
+        return redirect(url_for('admin_dashboard'))
+    
+    reseller_expiry = reseller_data[reseller].get("expiry", "")
+    if expiry_str:
+        try:
+            user_expiry = datetime.datetime.fromisoformat(expiry_str.replace('Z', '+00:00'))
+            if reseller_expiry:
+                reseller_dt = datetime.datetime.fromisoformat(reseller_expiry.replace('Z', '+00:00'))
+                if user_expiry > reseller_dt:
+                    flash("User expiry cannot exceed reseller's subscription expiry!", "error")
+                    return redirect(url_for('admin_dashboard'))
+            expiry_utc = user_expiry.strftime('%Y-%m-%dT%H:%M:%S+00:00')
+        except:
+            flash("Invalid expiry format!", "error")
+            return redirect(url_for('admin_dashboard'))
+    else:
+        default_expiry = datetime.datetime.utcnow() + datetime.timedelta(days=30)
+        expiry_utc = default_expiry.strftime('%Y-%m-%dT%H:%M:%S+00:00')
+    
+    user_data = {
+        "password": hashlib.sha256(password.encode()).hexdigest(),
+        "active": True,
+        "created": datetime.datetime.utcnow().isoformat(),
+        "expiry": expiry_utc
+    }
+    
+    if save_reseller_user(reseller, username, user_data):
+        flash(f"User '{username}' created successfully under '{reseller}'!", "success")
+    else:
+        flash("Error creating user!", "error")
+    
+    return redirect(url_for('admin_dashboard'))
+
+# ============================================
+# ADMIN TOGGLE / DELETE / EDIT USER
+# ============================================
+
+@app.route('/admin/toggle-user/<reseller>/<subuser>')
+def admin_toggle_user(reseller, subuser):
+    if not session.get("admin_auth"):
+        return redirect(url_for('admin_login'))
+    
+    if toggle_reseller_user(reseller, subuser):
+        flash(f"User '{subuser}' toggled!", "success")
+    else:
+        flash("Error toggling user!", "error")
+    
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/delete-user/<reseller>/<subuser>')
+def admin_delete_user(reseller, subuser):
+    if not session.get("admin_auth"):
+        return redirect(url_for('admin_login'))
+    
+    if delete_reseller_user(reseller, subuser):
+        flash(f"User '{subuser}' deleted!", "success")
+    else:
+        flash("Error deleting user!", "error")
+    
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/edit-user/<reseller>/<subuser>', methods=['GET', 'POST'])
+def admin_edit_user(reseller, subuser):
+    if not session.get("admin_auth"):
+        return redirect(url_for('admin_login'))
+    
+    reseller_data = get_reseller_data()
+    
+    if reseller not in reseller_data:
+        flash("Reseller not found!", "error")
+        return redirect(url_for('admin_dashboard'))
+    
+    if subuser not in reseller_data[reseller].get("users", {}):
+        flash("User not found!", "error")
+        return redirect(url_for('admin_dashboard'))
+    
+    user_data = reseller_data[reseller]["users"][subuser]
+    
+    if request.method == 'POST':
+        new_password = request.form.get('password', '').strip()
+        new_expiry = request.form.get('expiry', '')
+        new_status = request.form.get('status', 'active')
+        
+        # Update password if provided
+        if new_password:
+            reseller_data[reseller]["users"][subuser]["password"] = hashlib.sha256(new_password.encode()).hexdigest()
+        
+        # Update status
+        reseller_data[reseller]["users"][subuser]["active"] = new_status == "active"
+        
+        # Update expiry
+        if new_expiry:
+            try:
+                dt = datetime.datetime.fromisoformat(new_expiry.replace('Z', '+00:00'))
+                reseller_expiry = reseller_data[reseller].get("expiry", "")
+                if reseller_expiry:
+                    reseller_dt = datetime.datetime.fromisoformat(reseller_expiry.replace('Z', '+00:00'))
+                    if dt > reseller_dt:
+                        flash("User expiry cannot exceed reseller's subscription expiry!", "error")
+                        return redirect(url_for('admin_edit_user', reseller=reseller, subuser=subuser))
+                expiry_utc = dt.strftime('%Y-%m-%dT%H:%M:%S+00:00')
+                reseller_data[reseller]["users"][subuser]["expiry"] = expiry_utc
+            except:
+                flash("Invalid expiry format!", "error")
+                return redirect(url_for('admin_edit_user', reseller=reseller, subuser=subuser))
+        
+        save_reseller_data(reseller_data)
+        flash(f"User '{subuser}' updated successfully!", "success")
+        return redirect(url_for('admin_dashboard'))
+    
+    # GET request - show edit form
+    current_expiry = user_data.get("expiry", "")
+    if current_expiry:
+        try:
+            dt = datetime.datetime.fromisoformat(current_expiry.replace('Z', '+00:00'))
+            expiry_local = dt.strftime('%Y-%m-%dT%H:%M')
+        except:
+            expiry_local = (datetime.datetime.utcnow() + datetime.timedelta(days=30)).strftime('%Y-%m-%dT%H:%M')
+    else:
+        expiry_local = (datetime.datetime.utcnow() + datetime.timedelta(days=30)).strftime('%Y-%m-%dT%H:%M')
+    
+    html = f'''
+    <!DOCTYPE html>
+    <html><head><title>Edit User · {subuser}</title>
+    <style>
+        *{{margin:0;padding:0;box-sizing:border-box;}}
+        body{{background:#06060a;display:flex;justify-content:center;padding:30px;font-family:'Inter',sans-serif;}}
+        .box{{background:rgba(6,6,12,0.95);border:1px solid rgba(0,255,255,0.1);border-radius:20px;padding:30px;max-width:450px;width:100%;}}
+        h1{{font-family:'Orbitron',monospace;font-size:18px;font-weight:700;color:#fff;letter-spacing:2px;text-align:center;}}
+        h1 .hl{{color:#00ffff;}}
+        .sub{{text-align:center;font-size:8px;font-family:'Orbitron',monospace;color:#88ddff;letter-spacing:3px;margin-bottom:16px;}}
+        .back{{display:inline-block;font-size:8px;font-family:'Orbitron',monospace;color:#88ddff;text-decoration:none;margin-bottom:14px;letter-spacing:2px;}}
+        .back:hover{{color:#00ffff;}}
+        .form-group{{margin-bottom:12px;}}
+        label{{display:block;font-size:8px;font-family:'Orbitron',monospace;color:#88ddff;letter-spacing:2px;margin-bottom:3px;}}
+        input,select{{width:100%;padding:8px 12px;background:rgba(0,0,0,0.2);border:1px solid rgba(0,255,255,0.05);border-radius:8px;color:#fff;font-size:13px;outline:none;font-family:'Inter',sans-serif;}}
+        input:focus,select:focus{{border-color:rgba(0,255,255,0.15);}}
+        select option{{background:#0a0a1a;color:#fff;}}
+        .btn{{width:100%;padding:10px;background:rgba(0,255,255,0.05);border:1px solid rgba(0,255,255,0.1);border-radius:8px;color:#88ddff;font-family:'Orbitron',monospace;font-size:10px;letter-spacing:2px;cursor:pointer;transition:all 0.3s ease;margin-top:4px;}}
+        .btn:hover{{border-color:rgba(0,255,255,0.3);color:#00ffff;}}
+        .footer{{text-align:center;font-size:6px;color:#88ddff;letter-spacing:3px;margin-top:12px;font-family:'Orbitron',monospace;}}
+        .flash{{padding:8px 14px;border-radius:8px;margin-bottom:12px;font-size:10px;font-family:'Orbitron',monospace;letter-spacing:1px;display:flex;align-items:center;gap:8px;}}
+        .flash.success{{background:rgba(0,255,102,0.02);border:1px solid rgba(0,255,102,0.05);color:#00ff66;}}
+        .flash.error{{background:rgba(255,51,85,0.02);border:1px solid rgba(255,51,85,0.05);color:#ff3355;}}
+    </style>
+    </head>
+    <body>
+    <div class="box">
+        <h1><span class="hl">Edit</span> User</h1>
+        <div class="sub">premium · {subuser} (under {reseller})</div>
+        <a href="{url_for('admin_dashboard')}" class="back"><i class="fas fa-arrow-left"></i> back</a>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="flash {{ category }}"><i class="fas fa-{'check-circle' if category == 'success' else 'exclamation-circle'}"></i> {{ message }}</div>
+            {% endfor %}
+        {% endwith %}
+        
+        <form method="POST">
+            <div class="form-group">
+                <label><i class="fas fa-key"></i> new password (optional)</label>
+                <input type="password" name="password" placeholder="Leave blank to keep current">
+            </div>
+            <div class="form-group">
+                <label><i class="fas fa-calendar"></i> expiry</label>
+                <input type="datetime-local" name="expiry" value="{expiry_local}">
+            </div>
+            <div class="form-group">
+                <label><i class="fas fa-circle"></i> status</label>
+                <select name="status">
+                    <option value="active" {'selected' if user_data.get('active', True) else ''}>active</option>
+                    <option value="inactive" {'selected' if not user_data.get('active', True) else ''}>inactive</option>
+                </select>
+            </div>
+            <button type="submit" class="btn"><i class="fas fa-save"></i> update user</button>
+        </form>
+        <div class="footer">⚡ {brand_name} · reseller system ⚡</div>
+    </div>
+    </body>
+    </html>
+    '''
+    return html
+
+# ============================================
 # API ROUTES
 # ============================================
 
@@ -1811,19 +2212,25 @@ def lookup():
     try:
         data = request.get_json()
         number = data.get('number', '').strip()
+
         if not number:
             return jsonify({"status": "error", "message": "Phone number required"})
+
         clean_number = re.sub(r'[\+\s\-]', '', number)
         params = {'key': 'anish-exploits', 'type': 'number', 'num': clean_number}
+
         response = requests.get('https://exploitsindia.site/osint/api.php', params=params, timeout=30)
         response.raise_for_status()
         api_data = response.json()
+
         if api_data.get('status') == 'error':
             return jsonify(api_data)
+
         result = api_data.get('result', [])
         if result and len(result) > 0:
             info = result[0]
             address = info.get('address', info.get('location', ''))
+            
             if 'lat' not in info and 'lng' not in info and address and address != 'N/A':
                 try:
                     geocode_url = f"https://maps.googleapis.com/maps/api/geocode/json?address={urllib.parse.quote(address)}&key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8"
@@ -1835,7 +2242,12 @@ def lookup():
                         info['lng'] = loc['lng']
                 except:
                     pass
-        return jsonify({"status": "success", "result": result})
+
+        return jsonify({
+            "status": "success",
+            "result": result
+        })
+
     except requests.exceptions.Timeout:
         return jsonify({"status": "error", "message": "API timeout"})
     except requests.exceptions.RequestException as e:
@@ -1862,7 +2274,7 @@ if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5000))
     print("="*60)
-    print("⚡ SAKIL BHAI - RESELLER SYSTEM v10.1")
+    print("⚡ SAKIL BHAI - RESELLER SYSTEM v9.2")
     print("🔥 FULL ADMIN CONTROL · RESELLER + USER CREATE")
     print("📍 PERFECT LOCATION TRACKING - RED BORDER")
     print("="*60)
@@ -1874,4 +2286,5 @@ if __name__ == '__main__':
     print("🔑 Default Admin: sakil2026 / sakil2026")
     print("📁 Firebase: sakil-paid-hack-sell-1342007")
     print("="*60)
+
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
