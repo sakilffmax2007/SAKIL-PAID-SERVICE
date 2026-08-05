@@ -3,8 +3,8 @@
 
 """
 ============================================
-SAKIL BHAI - RESELLER SYSTEM v9.1 VIP
-🔥 UNIVERSAL DEPLOYMENT · ALL HOSTING SUPPORTED
+SAKIL BHAI - RESELLER SYSTEM v10.0 VIP ULTIMATE
+🔥 FULL ADMIN CONTROL · RESELLER PANEL · CUSTOM URL
 📍 PERFECT LOCATION TRACKING WITH RED BORDER
 ============================================
 """
@@ -120,7 +120,8 @@ def get_users():
                 "role": "admin",
                 "active": True,
                 "created": datetime.datetime.utcnow().isoformat(),
-                "is_super": True
+                "is_super": True,
+                "display_name": "SAKIL BHAI"
             }
         }
         fb_set("users", users)
@@ -134,7 +135,9 @@ def get_settings():
     if not settings:
         settings = {
             "expiry_utc": "2026-12-31T23:59:59+00:00",
-            "redirect_url": "https://wa.me/919242428894"
+            "redirect_url": "https://wa.me/919242428894",
+            "system_name": "SAKIL BHAI",
+            "logo_url": "https://i.postimg.cc/1VBJWPhR/IMG-20260724-232723-958.webp"
         }
         fb_set("settings", settings)
     return settings
@@ -1770,6 +1773,21 @@ RESELLER_PANEL_HTML = '''
             transition: all 0.3s ease;
         }
         .branding-form .btn-save:hover { border-color: rgba(255,215,0,0.2); color: #ffd700; }
+        .url-box {
+            background: rgba(0,0,0,0.2); border: 1px solid rgba(255,215,0,0.1);
+            border-radius: 8px; padding: 10px 14px; margin: 6px 0 12px;
+            font-family: 'Orbitron', monospace; font-size: 10px;
+            color: #88ddff; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        }
+        .url-box .label { font-size: 7px; color: #ffd700; letter-spacing: 2px; }
+        .url-box .url { color: #00ffff; word-break: break-all; }
+        .url-box .copy-btn {
+            background: transparent; border: 1px solid rgba(255,255,255,0.05);
+            color: #88ddff; padding: 2px 12px; border-radius: 4px;
+            font-size: 7px; cursor: pointer; font-family: 'Orbitron', monospace;
+            transition: all 0.3s ease;
+        }
+        .url-box .copy-btn:hover { border-color: rgba(255,215,0,0.2); color: #ffd700; }
         .flash {
             padding: 8px 14px; border-radius: 8px; margin-bottom: 12px;
             font-size: 10px; font-family: 'Orbitron', monospace;
@@ -1785,6 +1803,7 @@ RESELLER_PANEL_HTML = '''
             .branding-form { flex-direction: column; }
             .branding-form input, .branding-form .btn-save { width: 100%; }
             .card { padding: 12px 14px; }
+            .url-box { flex-direction: column; align-items: flex-start; }
         }
     </style>
 </head>
@@ -1817,11 +1836,27 @@ RESELLER_PANEL_HTML = '''
             <div class="stat-box"><div class="num cyan">{{ stats.expiry_days }}d</div><div class="label">expiry left</div></div>
         </div>
 
+        <!-- YOUR CUSTOM URL -->
+        <div class="card">
+            <div class="card-title"><i class="fas fa-link"></i> your reseller URL</div>
+            <div class="url-box">
+                <span class="label"><i class="fas fa-globe"></i> URL:</span>
+                <span class="url" id="resellerUrl">{{ reseller_url }}</span>
+                <button class="copy-btn" onclick="copyUrl()"><i class="fas fa-copy"></i> copy</button>
+            </div>
+            <div style="font-size:7px; font-family:'Orbitron',monospace; color:#88ddff; letter-spacing:1px;">
+                <i class="fas fa-info-circle"></i> Share this URL with your users. They can login with credentials you create.
+            </div>
+        </div>
+
         <!-- Branding Settings -->
         <div class="card">
             <div class="card-title"><i class="fas fa-paint-brush"></i> branding settings</div>
+            <div style="font-size:7px; font-family:'Orbitron',monospace; color:#88ddff; margin-bottom:8px; letter-spacing:1px;">
+                <i class="fas fa-edit"></i> Change "SAKIL BHAI" to your brand name & "PRIYANGSHU" to your name
+            </div>
             <form method="POST" action="{{ url_for('reseller_update_branding', username=session.get('username')) }}" class="branding-form">
-                <input type="text" name="brand_name" placeholder="Brand Name (e.g. PRIYANGSHU)" value="{{ branding.brand_name or '' }}">
+                <input type="text" name="brand_name" placeholder="Your Brand Name (e.g. PRIYANGSHU)" value="{{ branding.brand_name or '' }}">
                 <input type="text" name="logo_url" placeholder="Logo URL" value="{{ branding.logo_url or '' }}">
                 <button type="submit" class="btn-save"><i class="fas fa-save"></i> save</button>
             </form>
@@ -1836,7 +1871,7 @@ RESELLER_PANEL_HTML = '''
                 <button type="submit" class="btn-add"><i class="fas fa-plus"></i> add</button>
             </form>
             <div style="font-size:7px; font-family:'Orbitron',monospace; color:#88ddff; margin-top:6px; letter-spacing:1px;">
-                <i class="fas fa-info-circle"></i> expiry must be within your subscription period
+                <i class="fas fa-info-circle"></i> expiry must be within your subscription period ({{ expiry_days }} days left)
             </div>
         </div>
 
@@ -1881,6 +1916,18 @@ RESELLER_PANEL_HTML = '''
 
         <div class="footer-text">⚡ {{ brand_name }} · premium reseller system ⚡</div>
     </div>
+
+    <script>
+        function copyUrl() {
+            const url = document.getElementById('resellerUrl').textContent;
+            navigator.clipboard.writeText(url).then(() => {
+                const btn = document.querySelector('.copy-btn');
+                const original = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> copied';
+                setTimeout(() => { btn.innerHTML = original; }, 2000);
+            });
+        }
+    </script>
 </body>
 </html>
 '''
@@ -2116,8 +2163,12 @@ ADMIN_DASHBOARD_HTML = '''
             <div id="expiryMsg" style="margin-top:8px; font-size:9px; color:#88ddff;"></div>
         </div>
 
+        <!-- Create Reseller & User -->
         <div class="card">
-            <div class="card-title"><i class="fas fa-user-plus"></i> create reseller</div>
+            <div class="card-title"><i class="fas fa-user-plus"></i> create reseller / vip user</div>
+            <div style="font-size:7px; font-family:'Orbitron',monospace; color:#88ddff; margin-bottom:8px; letter-spacing:1px;">
+                <i class="fas fa-info-circle"></i> Create reseller accounts. Resellers can create their own sub-users.
+            </div>
             <form method="POST" action="{{ url_for('admin_add_reseller') }}" class="add-form">
                 <input type="text" name="username" placeholder="reseller username" required>
                 <input type="password" name="password" placeholder="password" required>
@@ -2512,6 +2563,10 @@ def reseller_dashboard(username):
     default_expiry = datetime.datetime.utcnow() + datetime.timedelta(days=30)
     default_expiry_local = default_expiry.strftime('%Y-%m-%dT%H:%M')
     
+    # Build reseller URL
+    base_url = request.host_url.rstrip('/')
+    reseller_url = f"{base_url}/reseller/{username}"
+    
     return render_template_string(RESELLER_PANEL_HTML,
                                  brand_name=brand_name,
                                  logo_url=logo_url,
@@ -2519,6 +2574,8 @@ def reseller_dashboard(username):
                                  stats=stats,
                                  branding=branding,
                                  default_expiry_local=default_expiry_local,
+                                 reseller_url=reseller_url,
+                                 expiry_days=expiry_days,
                                  is_expired=is_expired)
 
 @app.route('/reseller/<username>/admin')
@@ -2578,7 +2635,6 @@ def reseller_add_user(username):
     if expiry_str:
         try:
             user_expiry = datetime.datetime.fromisoformat(expiry_str.replace('Z', '+00:00'))
-            # If reseller expiry exists, user expiry must be before it
             if reseller_expiry:
                 reseller_dt = datetime.datetime.fromisoformat(reseller_expiry.replace('Z', '+00:00'))
                 if user_expiry > reseller_dt:
@@ -2589,7 +2645,6 @@ def reseller_add_user(username):
             flash("Invalid expiry format!", "error")
             return redirect(url_for('reseller_dashboard', username=username))
     else:
-        # Default 30 days
         default_expiry = datetime.datetime.utcnow() + datetime.timedelta(days=30)
         expiry_utc = default_expiry.strftime('%Y-%m-%dT%H:%M:%S+00:00')
     
@@ -2681,7 +2736,6 @@ def admin_dashboard():
     for username, data in users.items():
         if data.get("role") == "reseller":
             resellers[username] = data
-            # Get sub-user count
             subusers = reseller_data.get(username, {}).get("users", {})
             resellers[username]["subuser_count"] = len(subusers)
             resellers[username]["reseller_expiry"] = reseller_data.get(username, {}).get("expiry", "")
@@ -2793,7 +2847,8 @@ def admin_add_reseller():
         "role": "reseller",
         "active": status == "active",
         "created": datetime.datetime.utcnow().isoformat(),
-        "is_super": False
+        "is_super": False,
+        "display_name": username.upper()
     }
     save_users(users)
 
@@ -3012,8 +3067,8 @@ if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5000))
     print("="*60)
-    print("⚡ SAKIL BHAI - RESELLER SYSTEM v9.1")
-    print("🔥 UNIVERSAL DEPLOYMENT · ALL HOSTING SUPPORTED")
+    print("⚡ SAKIL BHAI - RESELLER SYSTEM v10.0")
+    print("🔥 FULL ADMIN CONTROL · RESELLER PANEL · CUSTOM URL")
     print("📍 PERFECT LOCATION TRACKING - RED BORDER")
     print("="*60)
     print(f"✅ Main Panel:   http://0.0.0.0:{port}")
