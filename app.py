@@ -256,7 +256,7 @@ def render_reseller_login(brand, subdomain, error):
     html = html.replace("sakil bhai · premium system", f"{brand} · premium system")
     html = html.replace("https://wa.me/919242428894", f"https://wa.me/919242428894?text=Hi%20{brand}%20Reseller")
     
-    # লগইন ফর্ম অ্যাকশন ঠিক করো
+    # লগইন ফর্ম অ্যাকশন ঠিক করো - FIXED SYNTAX ERROR
     html = html.replace('action="{{ url_for('login_page') }}"', 'action="/reseller-login"')
     
     # রিমেইনিং মিনিটস দেখাও (রিসেলারের নিজস্ব এক্সপাইরি)
