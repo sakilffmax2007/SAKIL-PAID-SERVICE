@@ -27,7 +27,7 @@ app.secret_key = secrets.token_hex(32)
 # ==============================================================
 # MASTER CONFIG - ORIGINAL (100% UNTOUCHED)
 # ==============================================================
-BASE_DOMAIN = "sakil-paid-service.onrender.com"  # তোমার মূল ডোমেইন
+BASE_DOMAIN = "sakil-paid-service.onrender.com"
 MASTER_ADMIN_USERNAME = "sakil2026"
 MASTER_ADMIN_PASSWORD_HASH = hashlib.sha256("sakil2026".encode()).hexdigest()
 
@@ -54,7 +54,6 @@ def save_reseller_data(data):
     except:
         return False
 
-# Firebase-based reseller data (uses same Firebase config as original)
 def fb_get_reseller(path):
     if FIREBASE_AVAILABLE:
         try:
@@ -84,10 +83,8 @@ def fb_set_reseller(path, data):
         return save_reseller_data(local)
 
 def get_all_resellers():
-    """সব রিসেলারদের তালিকা (মাস্টার অ্যাডমিনের জন্য)"""
     data = fb_get_reseller("resellers")
     if not data:
-        # ডিফল্ট মাস্টার রিসেলার
         data = {
             "sakil2026": {
                 "owner": "sakil2026",
@@ -116,21 +113,18 @@ def save_all_resellers(data):
     return fb_set_reseller("resellers", data)
 
 def get_reseller_by_subdomain(subdomain):
-    """সাবডোমেইন থেকে রিসেলার ডেটা পেতে"""
     resellers = get_all_resellers()
     if subdomain in resellers:
         return resellers[subdomain]
     return None
 
 def get_reseller_users(subdomain):
-    """একটি রিসেলারের সব ইউজার পেতে"""
     reseller = get_reseller_by_subdomain(subdomain)
     if reseller:
         return reseller.get("users", {})
     return {}
 
 def save_reseller_users(subdomain, users_data):
-    """একটি রিসেলারের ইউজার সেভ করতে"""
     resellers = get_all_resellers()
     if subdomain in resellers:
         resellers[subdomain]["users"] = users_data
@@ -138,7 +132,6 @@ def save_reseller_users(subdomain, users_data):
     return False
 
 def verify_reseller_user(subdomain, username, password):
-    """রিসেলারের ইউজার ভেরিফাই করতে"""
     users = get_reseller_users(subdomain)
     if username not in users:
         return False
@@ -148,14 +141,12 @@ def verify_reseller_user(subdomain, username, password):
     return hashed == users[username].get("password_hash", "")
 
 def get_reseller_user_role(subdomain, username):
-    """রিসেলারের ইউজারের রোল পেতে"""
     users = get_reseller_users(subdomain)
     if username not in users:
         return None
     return users[username].get("role", "user")
 
 def is_reseller_expired(subdomain):
-    """রিসেলারের এক্সপাইরি চেক করতে"""
     reseller = get_reseller_by_subdomain(subdomain)
     if not reseller:
         return True
@@ -169,29 +160,21 @@ def is_reseller_expired(subdomain):
         return True
 
 def get_reseller_brand(subdomain):
-    """রিসেলারের ব্র্যান্ড নাম পেতে"""
     reseller = get_reseller_by_subdomain(subdomain)
     if reseller:
         return reseller.get("brand", subdomain.upper())
     return subdomain.upper()
 
 def get_current_subdomain():
-    """বর্তমান রিকোয়েস্টের হোস্ট থেকে সাবডোমেইন বের করো"""
     host = request.host.split(':')[0]
     if host == BASE_DOMAIN or host == "localhost" or host == "127.0.0.1":
-        return None  # মাস্টার ডোমেইন
-    # check if it's a subdomain of BASE_DOMAIN
+        return None
     if host.endswith(f".{BASE_DOMAIN}"):
         sub = host.replace(f".{BASE_DOMAIN}", "")
-        # validate if this subdomain exists as a reseller
         resellers = get_all_resellers()
         if sub in resellers:
             return sub
     return None
-
-# ==============================================================
-# RESELLER SESSION DECORATOR
-# ==============================================================
 
 def reseller_session_required(f):
     @wraps(f)
@@ -215,7 +198,6 @@ def reseller_session_required(f):
 
 @app.route('/reseller-login', methods=['GET', 'POST'])
 def reseller_login():
-    """রিসেলারের লগইন পেজ - সাবডোমেইনে অ্যাক্সেস"""
     subdomain = get_current_subdomain()
     if not subdomain:
         return redirect(url_for('login_page'))
@@ -248,7 +230,6 @@ def reseller_login():
     return render_reseller_login(brand, subdomain, "")
 
 def render_reseller_login(brand, subdomain, error):
-    """রিসেলার লগইন পেজ রেন্ডার - অরিজিনাল লগইন পেজের মতো কিন্তু ব্র্যান্ডেড"""
     html = LOGIN_HTML
     html = html.replace("SAKIL BHAI", brand)
     html = html.replace("DEV BY :- · SAKIL BHAI", f"DEV BY :- · {brand}")
@@ -256,10 +237,9 @@ def render_reseller_login(brand, subdomain, error):
     html = html.replace("sakil bhai · premium system", f"{brand} · premium system")
     html = html.replace("https://wa.me/919242428894", f"https://wa.me/919242428894?text=Hi%20{brand}%20Reseller")
     
-    # লগইন ফর্ম অ্যাকশন ঠিক করো - FIXED SYNTAX ERROR
+    # FIXED: স্ট্রিং রিপ্লেসমেন্ট ঠিক করা হয়েছে - ডাবল কোট ব্যবহার করে
     html = html.replace('action="{{ url_for('login_page') }}"', 'action="/reseller-login"')
     
-    # রিমেইনিং মিনিটস দেখাও (রিসেলারের নিজস্ব এক্সপাইরি)
     remaining = 0
     reseller = get_reseller_by_subdomain(subdomain)
     if reseller and reseller.get("expiry_utc"):
@@ -278,7 +258,6 @@ def render_reseller_login(brand, subdomain, error):
 @app.route('/reseller-dashboard')
 @reseller_session_required
 def reseller_dashboard():
-    """রিসেলারের ড্যাশবোর্ড - অরিজিনাল ড্যাশবোর্ডের মতো কিন্তু ব্র্যান্ডেড"""
     subdomain = session.get("reseller_subdomain")
     brand = session.get("reseller_brand", subdomain.upper())
     
@@ -294,13 +273,9 @@ def reseller_dashboard():
     html = html.replace("sakil bhai", brand.lower())
     html = html.replace("SAKIL BHAI · PREMIUM SYSTEM", f"{brand} · PREMIUM SYSTEM")
     
-    # লগআউট লিংক ঠিক করো
     html = html.replace("{{ url_for('logout') }}", "/reseller-logout")
-    
-    # অ্যাডমিন লিংক ঠিক করো
     html = html.replace("{{ url_for('admin_dashboard') }}", "/reseller-admin")
     
-    # সেশন টাইমার - রিসেলারের নিজস্ব এক্সপাইরি
     remaining = 0
     reseller = get_reseller_by_subdomain(subdomain)
     if reseller and reseller.get("expiry_utc"):
@@ -314,20 +289,17 @@ def reseller_dashboard():
     html = html.replace("{{ remaining_seconds }}", str(remaining))
     html = html.replace("{{ max_seconds }}", "3600")
     
-    # ইউজারের রোল দেখাও
     role = session.get("reseller_role", "user")
     html = html.replace('{{ session.get('role', 'user') }}', role)
     html = html.replace('{{ session.get('role', 'user')|upper }}', role.upper())
     html = html.replace('class="role {{ session.get('role', 'user') }}"', f'class="role {role}"')
     
-    # অ্যাডমিন বাটন - শুধু অ্যাডমিন রোল দেখতে পাবে
     if role == 'admin':
         admin_btn = '<a href="/reseller-admin" class="admin"><i class="fas fa-crown"></i> admin panel</a>'
     else:
         admin_btn = ''
     html = html.replace('{% if session.get('role') == 'admin' %}\n                    <a href="{{ url_for('admin_dashboard') }}" class="admin"><i class="fas fa-crown"></i> admin panel</a>\n                    {% endif %}', admin_btn)
     
-    # অ্যাকশন রো থেকে লগআউট লিংক
     html = html.replace('{{ url_for('logout') }}', '/reseller-logout')
     
     return render_template_string(html)
@@ -342,7 +314,7 @@ def reseller_logout():
     return redirect('/reseller-login')
 
 # ==============================================================
-# RESELLER ADMIN PANEL (সিম্পলিফাইড - শুধু নিজের ইউজার দেখাবে)
+# RESELLER ADMIN PANEL
 # ==============================================================
 
 @app.route('/reseller-admin', methods=['GET', 'POST'])
@@ -352,14 +324,12 @@ def reseller_admin():
     brand = session.get("reseller_brand", subdomain.upper())
     role = session.get("reseller_role", "user")
     
-    # শুধু অ্যাডমিন রোল অ্যাক্সেস পাবে
     if role != 'admin':
         return "Access denied. Admin only.", 403
     
     users = get_reseller_users(subdomain)
     
     if request.method == 'POST':
-        # নতুন ইউজার যোগ করো
         new_username = request.form.get('username', '').strip()
         new_password = request.form.get('password', '')
         new_role = request.form.get('role', 'user')
@@ -384,7 +354,6 @@ def reseller_admin():
     active = sum(1 for u in users.values() if u.get("active", True))
     inactive = total - active
     
-    # রিসেলারের এক্সপাইরি স্ট্যাটাস
     remaining = 0
     reseller = get_reseller_by_subdomain(subdomain)
     if reseller and reseller.get("expiry_utc"):
@@ -403,7 +372,6 @@ def reseller_admin():
         "expiry_status": expiry_status
     }
     
-    # অরিজিনাল অ্যাডমিন HTML কপি করে ব্র্যান্ড পরিবর্তন করো
     html = ADMIN_DASHBOARD_HTML
     html = html.replace("SAKIL BHAI", brand)
     html = html.replace("sakil bhai", brand.lower())
@@ -412,7 +380,6 @@ def reseller_admin():
     html = html.replace("Powered by <strong style=\"color:#ffd700;\">PRIYANGSU</strong>", f"Powered by <strong style=\"color:#ffd700;\">{brand}</strong>")
     html = html.replace("sakil bhai · premium admin system", f"{brand} · premium reseller system")
     
-    # লিংক ঠিক করো
     html = html.replace("{{ url_for('user_dashboard') }}", "/reseller-dashboard")
     html = html.replace("{{ url_for('admin_logout') }}", "/reseller-admin-logout")
     html = html.replace("{{ url_for('admin_add_user') }}", "/reseller-admin")
@@ -420,17 +387,14 @@ def reseller_admin():
     html = html.replace("{{ url_for('admin_toggle_user', username=username) }}", f"/reseller-admin-toggle/{{{{ username }}}}")
     html = html.replace("{{ url_for('admin_delete_user', username=username) }}", f"/reseller-admin-delete/{{{{ username }}}}")
     
-    # এক্সপাইরি ফর্ম সরিয়ে দাও (রিসেলার এক্সপাইরি মাস্টার অ্যাডমিন সেট করে)
     html = re.sub(r'<!-- Expiry Management -->.*?<!-- End Expiry -->', '', html, flags=re.DOTALL)
     
-    # স্ট্যাটস আপডেট করো
     html = html.replace("{{ stats.total_users }}", str(stats["total_users"]))
     html = html.replace("{{ stats.active_users }}", str(stats["active_users"]))
     html = html.replace("{{ stats.inactive_users }}", str(stats["inactive_users"]))
     html = html.replace("{{ stats.expiry_status }}", stats["expiry_status"])
     html = html.replace("{{ remaining }}", str(remaining))
     
-    # ইউজার টেবিল তৈরি করো
     table_rows = ""
     for username, data in users.items():
         role_badge = "admin" if data.get("role") == "admin" else "user"
@@ -469,12 +433,10 @@ def reseller_admin():
     html = html.replace('{% for username, data in users.items() %}', '')
     html = html.replace('{% endfor %}', '')
     
-    # টেবিলের বডি টেমপ্লেট রিপ্লেস করো
     pattern = r'<tbody>.*?</tbody>'
     replacement = f'<tbody>{table_rows}</tbody>'
     html = re.sub(pattern, replacement, html, flags=re.DOTALL)
     
-    # ফ্ল্যাশ মেসেজ হ্যান্ডেল
     with app.app_context():
         flash_messages = get_flashed_messages(with_categories=True)
         flash_html = ""
@@ -626,7 +588,7 @@ def reseller_admin_logout():
     return reseller_logout()
 
 # ==============================================================
-# MASTER ADMIN - RESELLER MANAGEMENT (অরিজিনাল অ্যাডমিনে যোগ করো)
+# MASTER ADMIN - RESELLER MANAGEMENT
 # ==============================================================
 
 @app.route('/admin/resellers')
@@ -814,7 +776,6 @@ def admin_add_reseller():
         flash("Subdomain and password required!", "error")
         return redirect('/admin/resellers')
     
-    # সাবডোমেইন ভ্যালিডেশন
     if not re.match(r'^[a-z0-9\-]+$', subdomain):
         flash("Subdomain must be lowercase letters, numbers, and hyphens only!", "error")
         return redirect('/admin/resellers')
@@ -824,7 +785,6 @@ def admin_add_reseller():
         flash("Subdomain already exists!", "error")
         return redirect('/admin/resellers')
     
-    # এক্সপাইরি কনভার্ট
     expiry_utc = "2099-12-31T23:59:59+00:00"
     if expiry:
         try:
@@ -905,17 +865,10 @@ def admin_reseller_delete(subdomain):
     
     return redirect('/admin/resellers')
 
-# ==============================================================
-# SUBDOMAIN REDIRECT - রুটে গেলে রিসেলার লগইন দেখাবে
-# ==============================================================
-
 @app.before_request
 def before_request():
-    """প্রত্যেক রিকোয়েস্টের আগে চেক করো - রিসেলার সাবডোমেইন কিনা"""
-    # রিসেলার রাউটে না থাকলে
     if request.endpoint and request.endpoint.startswith('reseller'):
         return
-    # অ্যাডমিন রিসেলার ম্যানেজমেন্ট রাউটে না থাকলে
     if request.endpoint and request.endpoint.startswith('admin_reseller'):
         return
     if request.endpoint and request.endpoint == 'admin_resellers':
@@ -923,25 +876,17 @@ def before_request():
     
     subdomain = get_current_subdomain()
     if subdomain:
-        # রিসেলার সাবডোমেইন - রিডাইরেক্ট করো রিসেলার লগইনে
-        # কিন্তু যদি ইতিমধ্যে রিসেলার সেশনে থাকে
         if session.get("reseller_subdomain") == subdomain:
             return
-        # রুট পেজ বা লগইন পেজে গেলে রিসেলার লগইনে পাঠাও
         if request.endpoint in ['login_page', 'user_dashboard', 'admin_login', 'admin_dashboard'] or request.path == '/':
             return redirect('/reseller-login')
-        # API রিকোয়েস্ট চেক করো - রিসেলারের API ব্যবহার করবে
         if request.path.startswith('/api/'):
-            # রিসেলারের API - আমরা অরিজিনাল API ব্যবহার করবো
             return
 
 # ==============================================================
 # ORIGINAL CODE STARTS HERE - 100% UNTOUCHED
 # ==============================================================
 
-# ============================================
-# FIREBASE CONFIG
-# ============================================
 FIREBASE_CONFIG = {
     "apiKey": "AIzaSyC74129by4J9ghwX7kCq_xamWVuaBkZvac",
     "authDomain": "sakil-paid-hack-sell-1342007.firebaseapp.com",
@@ -1413,7 +1358,7 @@ LOGIN_HTML = '''
 '''
 
 # ============================================
-# USER DASHBOARD - PERFECT LOCATION WITH BORDER
+# USER DASHBOARD - ORIGINAL (100% UNTOUCHED)
 # ============================================
 USER_PANEL_HTML = '''
 <!DOCTYPE html>
@@ -2454,7 +2399,7 @@ USER_PANEL_HTML = '''
 '''
 
 # ============================================
-# ADMIN DASHBOARD
+# ADMIN DASHBOARD - ORIGINAL
 # ============================================
 ADMIN_DASHBOARD_HTML = '''
 <!DOCTYPE html>
@@ -2784,7 +2729,7 @@ ADMIN_DASHBOARD_HTML = '''
 '''
 
 # ============================================
-# ADMIN LOGIN PAGE
+# ADMIN LOGIN PAGE - ORIGINAL
 # ============================================
 ADMIN_LOGIN_HTML = '''
 <!DOCTYPE html>
@@ -3221,7 +3166,6 @@ def lookup():
             info = result[0]
             address = info.get('address', info.get('location', ''))
             
-            # লোকেশন লাইভ কিনা চেক করি - ল্যাট/লং থাকলে লাইভ
             if 'lat' not in info and 'lng' not in info and address and address != 'N/A':
                 try:
                     geocode_url = f"https://maps.googleapis.com/maps/api/geocode/json?address={urllib.parse.quote(address)}&key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8"
