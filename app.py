@@ -25,14 +25,14 @@ app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
 
 # ==============================================================
-# MASTER CONFIG - ORIGINAL (100% UNTOUCHED)
+# MASTER CONFIG
 # ==============================================================
-BASE_DOMAIN = "sakil-paid-service.onrender.com"
+BASE_DOMAIN = "sakil-paid-service-2.onrender.com"
 MASTER_ADMIN_USERNAME = "sakil2026"
 MASTER_ADMIN_PASSWORD_HASH = hashlib.sha256("sakil2026".encode()).hexdigest()
 
 # ==============================================================
-# RESELLER SYSTEM - ADDED WITHOUT TOUCHING ORIGINAL CODE
+# RESELLER SYSTEM
 # ==============================================================
 
 RESELLER_DATA_FILE = "reseller_data.json"
@@ -193,7 +193,7 @@ def reseller_session_required(f):
     return decorated
 
 # ==============================================================
-# RESELLER ROUTES - NEW ROUTES FOR SUBDOMAINS
+# RESELLER ROUTES
 # ==============================================================
 
 @app.route('/reseller-login', methods=['GET', 'POST'])
@@ -237,7 +237,7 @@ def render_reseller_login(brand, subdomain, error):
     html = html.replace("sakil bhai · premium system", f"{brand} · premium system")
     html = html.replace("https://wa.me/919242428894", f"https://wa.me/919242428894?text=Hi%20{brand}%20Reseller")
     
-    # FIXED: স্ট্রিং রিপ্লেসমেন্ট ঠিক করা হয়েছে - ডাবল কোট ব্যবহার করে
+    # ✅ FIXED: ডাবল কোট ব্যবহার করে স্ট্রিং রিপ্লেস
     html = html.replace('action="{{ url_for('login_page') }}"', 'action="/reseller-login"')
     
     remaining = 0
@@ -3222,7 +3222,7 @@ if __name__ == '__main__':
     print("📁 Firebase: sakil-paid-hack-sell-1342007")
     print("="*60)
     print("💡 To create a reseller: Login to Master Admin → Reseller Management")
-    print("💡 Reseller URL: https://{subdomain}.sakil-paid-service.onrender.com")
+    print("💡 Reseller URL: https://{subdomain}.sakil-paid-service-2.onrender.com")
     print("="*60)
 
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
