@@ -70,23 +70,9 @@ try:
     print("✅ Firebase Admin SDK Connected")
 except Exception as e:
     print(f"⚠️ Firebase Admin SDK error: {e}")
-    
-    # Fallback: Try pyrebase (if available)
-    try:
-        import pyrebase
-        firebase = pyrebase.initialize_app(FIREBASE_CONFIG)
-        db = firebase.database()
-        try:
-            db.child("test").shallow().get()
-            FIREBASE_AVAILABLE = True
-            print("✅ Firebase (pyrebase) Connected")
-        except:
-            FIREBASE_AVAILABLE = False
-            db = None
-    except:
-        print("⚠️ Firebase unavailable - using local fallback")
-        FIREBASE_AVAILABLE = False
-        db = None
+    print("⚠️ Using local fallback storage")
+    FIREBASE_AVAILABLE = False
+    db = None
 
 USER_DATA_FILE = "user_firebase_fallback.json"
 
@@ -114,11 +100,6 @@ def fb_get(path):
                 ref = db.reference(path)
                 data = ref.get()
                 return data if data else {}
-            elif hasattr(db, 'child'):
-                data = db.child(path).get()
-                if data and data.val():
-                    return data.val()
-                return {}
         except:
             local = load_local_data()
             return local.get(path, {})
@@ -132,9 +113,6 @@ def fb_set(path, data):
             if hasattr(db, 'reference'):
                 ref = db.reference(path)
                 ref.set(data)
-                return True
-            elif hasattr(db, 'child'):
-                db.child(path).set(data)
                 return True
         except:
             local = load_local_data()
