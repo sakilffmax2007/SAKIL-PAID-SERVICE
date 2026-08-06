@@ -3,10 +3,10 @@
 
 """
 ============================================
-SAKIL BHAI - MULTI-PANEL SYSTEM v11.0
-🔥 SEPARATE PANELS · SEPARATE LOGINS
+SAKIL BHAI - MULTI-PANEL SYSTEM v13.0
+🔥 USER LIMIT + DEVICE LIMIT CONTROL
 📍 PERFECT LOCATION TRACKING - RED BORDER
-✅ FIREBASE ADMIN SDK · NO DEPENDENCY CONFLICT
+✅ RESELLER BRAND CUSTOMIZATION
 ============================================
 """
 
@@ -44,12 +44,10 @@ FIREBASE_CONFIG = {
 FIREBASE_AVAILABLE = False
 db = None
 
-# Try Firebase Admin SDK first (no pyrebase)
 try:
     import firebase_admin
     from firebase_admin import credentials, db as firebase_db
     
-    # Check if already initialized
     if not firebase_admin._apps:
         cred = credentials.Certificate({
             "type": "service_account",
@@ -136,7 +134,8 @@ def get_users():
                 "role": "main_admin",
                 "active": True,
                 "created": datetime.datetime.utcnow().isoformat(),
-                "created_by": "system"
+                "created_by": "system",
+                "sessions": []  # Track active sessions
             }
         }
         fb_set("users", users)
@@ -244,6 +243,96 @@ def get_brand_for_user(username):
         return get_reseller_brand(reseller_id)
     settings = get_settings()
     return settings.get("main_brand", "SAKIL BHAI")
+
+def get_user_sessions(username):
+    users = get_users()
+    if username not in users:
+        return []
+    return users[username].get("sessions", [])
+
+def get_device_limit(username):
+    users = get_users()
+    if username not in users:
+        return 0
+    reseller_id = users[username].get("reseller_id")
+    if reseller_id:
+        resellers = get_resellers()
+        if reseller_id in resellers:
+            return resellers[reseller_id].get("device_limit", 1)
+    return 1  # Default 1 device
+
+def get_user_limit(reseller_username):
+    resellers = get_resellers()
+    if reseller_username in resellers:
+        return resellers[reseller_username].get("user_limit", 10)
+    return 10  # Default 10 users
+
+def get_user_count(reseller_username):
+    users = get_users()
+    count = 0
+    for u, d in users.items():
+        if d.get("reseller_id") == reseller_username:
+            count += 1
+    return count
+
+def can_login(username, device_id):
+    users = get_users()
+    if username not in users:
+        return False, "User not found"
+    
+    sessions = users[username].get("sessions", [])
+    device_limit = get_device_limit(username)
+    
+    # Check if this device already has a session
+    for session in sessions:
+        if session.get("device_id") == device_id:
+            return True, "Device already logged in"
+    
+    # Check if device limit reached
+    if len(sessions) >= device_limit:
+        return False, f"Device limit reached ({device_limit} devices allowed)"
+    
+    return True, "OK"
+
+def add_session(username, device_id, device_name=""):
+    users = get_users()
+    if username not in users:
+        return False
+    
+    sessions = users[username].get("sessions", [])
+    
+    # Remove existing session for this device
+    sessions = [s for s in sessions if s.get("device_id") != device_id]
+    
+    # Add new session
+    sessions.append({
+        "device_id": device_id,
+        "device_name": device_name,
+        "login_time": datetime.datetime.utcnow().isoformat()
+    })
+    
+    users[username]["sessions"] = sessions
+    save_users(users)
+    return True
+
+def remove_session(username, device_id):
+    users = get_users()
+    if username not in users:
+        return False
+    
+    sessions = users[username].get("sessions", [])
+    sessions = [s for s in sessions if s.get("device_id") != device_id]
+    users[username]["sessions"] = sessions
+    save_users(users)
+    return True
+
+def clear_all_sessions(username):
+    users = get_users()
+    if username not in users:
+        return False
+    users[username]["sessions"] = []
+    save_users(users)
+    return True
 
 # ============================================
 # DECORATORS
@@ -555,32 +644,6 @@ USER_LOGIN_HTML = '''
             text-align: center;
         }
         .flash-msg.error { border-color: rgba(255, 51, 85, 0.05); color: #ff3355; }
-        .panel-links {
-            margin-top: 14px;
-            display: flex;
-            justify-content: center;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-        .panel-links a {
-            font-size: 7px;
-            font-family: 'Orbitron', monospace;
-            color: #88ddff;
-            text-decoration: none;
-            letter-spacing: 2px;
-            padding: 3px 12px;
-            border: 1px solid rgba(255,255,255,0.03);
-            border-radius: 20px;
-            transition: all 0.3s ease;
-        }
-        .panel-links a:hover {
-            border-color: rgba(0,255,255,0.2);
-            color: #00ffff;
-        }
-        .panel-links a.admin-link { border-color: rgba(255,215,0,0.05); color: #ffd700; }
-        .panel-links a.admin-link:hover { border-color: rgba(255,215,0,0.2); color: #ffd700; }
-        .panel-links a.reseller-link { border-color: rgba(0,255,102,0.05); color: #00ff66; }
-        .panel-links a.reseller-link:hover { border-color: rgba(0,255,102,0.2); color: #00ff66; }
         @media (max-width: 480px) {
             .login-container { padding: 32px 22px; }
             .login-container .brand-section h1 { font-size: 18px; letter-spacing: 2px; }
@@ -632,9 +695,333 @@ USER_LOGIN_HTML = '''
             <span class="item"><i class="fas fa-clock"></i> {{ remaining_minutes }}m</span>
             <span class="item"><i class="fas fa-shield-alt"></i> secure</span>
         </div>
-        <div class="panel-links">
-            <a href="{{ url_for('reseller_login_page') }}" class="reseller-link"><i class="fas fa-store"></i> reseller</a>
-            <a href="{{ url_for('admin_login_page') }}" class="admin-link"><i class="fas fa-crown"></i> admin</a>
+        <div class="footer-text">⚡ sakil bhai · multi-panel system ⚡</div>
+    </div>
+    <script>
+        document.querySelector('input[name="username"]').focus();
+        document.querySelectorAll('input').forEach(el => {
+            el.addEventListener('input', function() {
+                document.getElementById('loginError').classList.remove('show');
+            });
+        });
+    </script>
+</body>
+</html>
+'''
+
+# ============================================
+# RESELLER LOGIN PAGE
+# ============================================
+RESELLER_LOGIN_HTML = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RESELLER LOGIN · SAKIL BHAI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #06060a;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        .bg-animation {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0;
+            overflow: hidden;
+        }
+        .bg-animation .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            animation: orbFloat 20s ease-in-out infinite;
+        }
+        .bg-animation .orb:nth-child(1) {
+            width: 400px; height: 400px;
+            background: rgba(255, 215, 0, 0.03);
+            top: -100px; left: -100px;
+            animation-delay: 0s;
+        }
+        .bg-animation .orb:nth-child(2) {
+            width: 500px; height: 500px;
+            background: rgba(255, 215, 0, 0.02);
+            bottom: -150px; right: -150px;
+            animation-delay: -5s;
+        }
+        .bg-animation .orb:nth-child(3) {
+            width: 300px; height: 300px;
+            background: rgba(255, 215, 0, 0.015);
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            animation-delay: -10s;
+        }
+        @keyframes orbFloat {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(30px, -30px) scale(1.1); }
+            66% { transform: translate(-20px, 20px) scale(0.9); }
+        }
+        .login-container {
+            position: relative;
+            z-index: 1;
+            background: rgba(6, 6, 12, 0.92);
+            border: 1px solid rgba(255, 215, 0, 0.15);
+            border-radius: 24px;
+            padding: 48px 40px;
+            max-width: 420px;
+            width: 92%;
+            backdrop-filter: blur(40px);
+            box-shadow: 0 0 80px rgba(255, 215, 0, 0.05), inset 0 0 80px rgba(255, 215, 0, 0.005);
+            animation: containerIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes containerIn {
+            0% { opacity: 0; transform: translateY(30px) scale(0.96); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .login-container .brand-section {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .login-container .brand-section .icon-wrap {
+            display: inline-block;
+            font-size: 32px;
+            color: #ffd700;
+            opacity: 0.5;
+            margin-bottom: 4px;
+        }
+        .login-container .brand-section h1 {
+            font-family: 'Orbitron', monospace;
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: 4px;
+            color: #ffffff;
+        }
+        .login-container .brand-section h1 .highlight {
+            color: #ffd700;
+            text-shadow: 0 0 40px rgba(255, 215, 0, 0.2);
+        }
+        .login-container .brand-section .tagline {
+            font-size: 9px;
+            font-weight: 400;
+            letter-spacing: 6px;
+            color: #88ddff;
+            text-transform: uppercase;
+            margin-top: 2px;
+            font-family: 'Orbitron', monospace;
+        }
+        .login-container .brand-section .divider {
+            width: 40px;
+            height: 1px;
+            background: rgba(255, 215, 0, 0.3);
+            margin: 10px auto 0;
+        }
+        .login-container .brand-section .panel-badge {
+            display: inline-block;
+            margin-top: 8px;
+            font-size: 8px;
+            font-family: 'Orbitron', monospace;
+            color: #ffd700;
+            letter-spacing: 4px;
+            border: 1px solid rgba(255,215,0,0.2);
+            padding: 2px 16px;
+            border-radius: 30px;
+        }
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block;
+            font-size: 9px;
+            font-weight: 600;
+            color: #88ddff;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 6px;
+            font-family: 'Orbitron', monospace;
+        }
+        .form-group label i { color: #ffd700; margin-right: 6px; }
+        .form-group .input-wrap {
+            display: flex;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 215, 0, 0.15);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+        .form-group .input-wrap:focus-within {
+            border-color: rgba(255, 215, 0, 0.6);
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.05);
+        }
+        .form-group .input-wrap .prefix {
+            padding: 12px 0 12px 16px;
+            color: #88ddff;
+            font-size: 13px;
+            width: 38px;
+            text-align: center;
+            font-family: 'Orbitron', monospace;
+        }
+        .form-group .input-wrap .line {
+            width: 1px;
+            height: 20px;
+            background: rgba(255, 215, 0, 0.1);
+        }
+        .form-group .input-wrap input {
+            flex: 1;
+            padding: 12px 16px;
+            background: transparent;
+            border: none;
+            color: #ffffff;
+            font-size: 15px;
+            outline: none;
+            font-family: 'Inter', sans-serif;
+            font-weight: 400;
+            letter-spacing: 0.5px;
+        }
+        .form-group .input-wrap input::placeholder {
+            color: #88ddff;
+            font-size: 13px;
+            font-weight: 300;
+        }
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: rgba(255, 215, 0, 0.05);
+            border: 1px solid rgba(255, 215, 0, 0.2);
+            border-radius: 12px;
+            color: #88ddff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Orbitron', monospace;
+            letter-spacing: 4px;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            margin-top: 4px;
+        }
+        .btn-login:hover {
+            border-color: rgba(255, 215, 0, 0.5);
+            color: #ffd700;
+            box-shadow: 0 0 40px rgba(255, 215, 0, 0.05);
+        }
+        .btn-login i { font-size: 14px; color: #ffd700; }
+        .error-text {
+            color: #ff3355;
+            font-size: 11px;
+            padding: 6px 0;
+            display: none;
+            text-align: center;
+            font-family: 'Orbitron', monospace;
+            letter-spacing: 1px;
+        }
+        .error-text.show { display: block; animation: shake 0.4s ease; }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
+        }
+        .status-bar {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 18px;
+            padding: 10px 14px;
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 215, 0, 0.05);
+        }
+        .status-bar .item {
+            font-size: 7px;
+            font-weight: 400;
+            color: #88ddff;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-family: 'Orbitron', monospace;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .status-bar .item i { font-size: 8px; color: #ffd700; }
+        .footer-text {
+            text-align: center;
+            font-size: 6px;
+            color: #88ddff;
+            letter-spacing: 3px;
+            margin-top: 16px;
+            font-family: 'Orbitron', monospace;
+        }
+        .flash-msg {
+            padding: 8px 14px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            font-size: 9px;
+            font-family: 'Orbitron', monospace;
+            letter-spacing: 1px;
+            background: rgba(0, 255, 102, 0.02);
+            border: 1px solid rgba(0, 255, 102, 0.05);
+            color: #00ff66;
+            text-align: center;
+        }
+        .flash-msg.error { border-color: rgba(255, 51, 85, 0.05); color: #ff3355; }
+        @media (max-width: 480px) {
+            .login-container { padding: 32px 22px; }
+            .login-container .brand-section h1 { font-size: 18px; letter-spacing: 2px; }
+            .status-bar { gap: 12px; flex-wrap: wrap; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-animation">
+        <div class="orb"></div>
+        <div class="orb"></div>
+        <div class="orb"></div>
+    </div>
+    <div class="login-container">
+        <div class="brand-section">
+            <div class="icon-wrap"><i class="fas fa-store"></i></div>
+            <h1><span class="highlight">RESELLER</span> PANEL</h1>
+            <div class="tagline">premium · reseller management</div>
+            <div class="panel-badge"><i class="fas fa-shield-halved"></i> reseller access</div>
+            <div class="divider"></div>
+        </div>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="flash-msg {{ category }}"><i class="fas fa-{% if category == 'error' %}exclamation-circle{% else %}check-circle{% endif %}"></i> {{ message }}</div>
+            {% endfor %}
+        {% endwith %}
+        <form method="POST">
+            <div class="form-group">
+                <label><i class="fas fa-user"></i> username</label>
+                <div class="input-wrap">
+                    <div class="prefix"><i class="fas fa-user"></i></div>
+                    <div class="line"></div>
+                    <input type="text" name="username" placeholder="Enter reseller username" required autofocus>
+                </div>
+            </div>
+            <div class="form-group">
+                <label><i class="fas fa-key"></i> password</label>
+                <div class="input-wrap">
+                    <div class="prefix"><i class="fas fa-lock"></i></div>
+                    <div class="line"></div>
+                    <input type="password" name="password" placeholder="Enter password" required>
+                </div>
+            </div>
+            <div class="error-text" id="loginError">{{ error }}</div>
+            <button type="submit" class="btn-login"><i class="fas fa-unlock-alt"></i> reseller login</button>
+        </form>
+        <div class="status-bar">
+            <span class="item"><i class="fas fa-database"></i> firebase</span>
+            <span class="item"><i class="fas fa-clock"></i> {{ remaining_minutes }}m</span>
+            <span class="item"><i class="fas fa-shield-alt"></i> secure</span>
         </div>
         <div class="footer-text">⚡ sakil bhai · multi-panel system ⚡</div>
     </div>
@@ -651,7 +1038,335 @@ USER_LOGIN_HTML = '''
 '''
 
 # ============================================
-# USER PANEL
+# ADMIN LOGIN PAGE
+# ============================================
+ADMIN_LOGIN_HTML = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ADMIN LOGIN · SAKIL BHAI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #06060a;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        .bg-animation {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0;
+            overflow: hidden;
+        }
+        .bg-animation .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            animation: orbFloat 20s ease-in-out infinite;
+        }
+        .bg-animation .orb:nth-child(1) {
+            width: 400px; height: 400px;
+            background: rgba(0, 255, 255, 0.04);
+            top: -100px; left: -100px;
+            animation-delay: 0s;
+        }
+        .bg-animation .orb:nth-child(2) {
+            width: 500px; height: 500px;
+            background: rgba(0, 255, 255, 0.03);
+            bottom: -150px; right: -150px;
+            animation-delay: -5s;
+        }
+        .bg-animation .orb:nth-child(3) {
+            width: 300px; height: 300px;
+            background: rgba(255, 215, 0, 0.02);
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            animation-delay: -10s;
+        }
+        @keyframes orbFloat {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(30px, -30px) scale(1.1); }
+            66% { transform: translate(-20px, 20px) scale(0.9); }
+        }
+        .login-container {
+            position: relative;
+            z-index: 1;
+            background: rgba(6, 6, 12, 0.92);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            border-radius: 24px;
+            padding: 48px 40px;
+            max-width: 420px;
+            width: 92%;
+            backdrop-filter: blur(40px);
+            box-shadow: 0 0 80px rgba(0, 255, 255, 0.08), inset 0 0 80px rgba(0, 255, 255, 0.01);
+            animation: containerIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes containerIn {
+            0% { opacity: 0; transform: translateY(30px) scale(0.96); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .login-container .brand-section {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .login-container .brand-section .icon-wrap {
+            display: inline-block;
+            font-size: 32px;
+            color: #00ffff;
+            opacity: 0.6;
+            margin-bottom: 4px;
+        }
+        .login-container .brand-section h1 {
+            font-family: 'Orbitron', monospace;
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: 4px;
+            color: #ffffff;
+        }
+        .login-container .brand-section h1 .highlight {
+            color: #00ffff;
+            text-shadow: 0 0 40px rgba(0, 255, 255, 0.2);
+        }
+        .login-container .brand-section .tagline {
+            font-size: 9px;
+            font-weight: 400;
+            letter-spacing: 6px;
+            color: #88ddff;
+            text-transform: uppercase;
+            margin-top: 2px;
+            font-family: 'Orbitron', monospace;
+        }
+        .login-container .brand-section .divider {
+            width: 40px;
+            height: 1px;
+            background: rgba(0, 255, 255, 0.3);
+            margin: 10px auto 0;
+        }
+        .login-container .brand-section .panel-badge {
+            display: inline-block;
+            margin-top: 8px;
+            font-size: 8px;
+            font-family: 'Orbitron', monospace;
+            color: #00ffff;
+            letter-spacing: 4px;
+            border: 1px solid rgba(0,255,255,0.2);
+            padding: 2px 16px;
+            border-radius: 30px;
+        }
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block;
+            font-size: 9px;
+            font-weight: 600;
+            color: #88ddff;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 6px;
+            font-family: 'Orbitron', monospace;
+        }
+        .form-group label i { color: #00ffff; margin-right: 6px; }
+        .form-group .input-wrap {
+            display: flex;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(0, 255, 255, 0.15);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+        .form-group .input-wrap:focus-within {
+            border-color: rgba(0, 255, 255, 0.6);
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.05);
+        }
+        .form-group .input-wrap .prefix {
+            padding: 12px 0 12px 16px;
+            color: #88ddff;
+            font-size: 13px;
+            width: 38px;
+            text-align: center;
+            font-family: 'Orbitron', monospace;
+        }
+        .form-group .input-wrap .line {
+            width: 1px;
+            height: 20px;
+            background: rgba(0, 255, 255, 0.1);
+        }
+        .form-group .input-wrap input {
+            flex: 1;
+            padding: 12px 16px;
+            background: transparent;
+            border: none;
+            color: #ffffff;
+            font-size: 15px;
+            outline: none;
+            font-family: 'Inter', sans-serif;
+            font-weight: 400;
+            letter-spacing: 0.5px;
+        }
+        .form-group .input-wrap input::placeholder {
+            color: #88ddff;
+            font-size: 13px;
+            font-weight: 300;
+        }
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: rgba(0, 255, 255, 0.05);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            border-radius: 12px;
+            color: #88ddff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'Orbitron', monospace;
+            letter-spacing: 4px;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            margin-top: 4px;
+        }
+        .btn-login:hover {
+            border-color: rgba(0, 255, 255, 0.5);
+            color: #00ffff;
+            box-shadow: 0 0 40px rgba(0, 255, 255, 0.05);
+        }
+        .btn-login i { font-size: 14px; color: #00ffff; }
+        .error-text {
+            color: #ff3355;
+            font-size: 11px;
+            padding: 6px 0;
+            display: none;
+            text-align: center;
+            font-family: 'Orbitron', monospace;
+            letter-spacing: 1px;
+        }
+        .error-text.show { display: block; animation: shake 0.4s ease; }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-4px); }
+            75% { transform: translateX(4px); }
+        }
+        .status-bar {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 18px;
+            padding: 10px 14px;
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 10px;
+            border: 1px solid rgba(0, 255, 255, 0.05);
+        }
+        .status-bar .item {
+            font-size: 7px;
+            font-weight: 400;
+            color: #88ddff;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-family: 'Orbitron', monospace;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .status-bar .item i { font-size: 8px; color: #00ffff; }
+        .footer-text {
+            text-align: center;
+            font-size: 6px;
+            color: #88ddff;
+            letter-spacing: 3px;
+            margin-top: 16px;
+            font-family: 'Orbitron', monospace;
+        }
+        .flash-msg {
+            padding: 8px 14px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            font-size: 9px;
+            font-family: 'Orbitron', monospace;
+            letter-spacing: 1px;
+            background: rgba(0, 255, 102, 0.02);
+            border: 1px solid rgba(0, 255, 102, 0.05);
+            color: #00ff66;
+            text-align: center;
+        }
+        .flash-msg.error { border-color: rgba(255, 51, 85, 0.05); color: #ff3355; }
+        @media (max-width: 480px) {
+            .login-container { padding: 32px 22px; }
+            .login-container .brand-section h1 { font-size: 18px; letter-spacing: 2px; }
+            .status-bar { gap: 12px; flex-wrap: wrap; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-animation">
+        <div class="orb"></div>
+        <div class="orb"></div>
+        <div class="orb"></div>
+    </div>
+    <div class="login-container">
+        <div class="brand-section">
+            <div class="icon-wrap"><i class="fas fa-crown"></i></div>
+            <h1><span class="highlight">ADMIN</span> PANEL</h1>
+            <div class="tagline">main admin · full control</div>
+            <div class="panel-badge"><i class="fas fa-shield-halved"></i> admin access</div>
+            <div class="divider"></div>
+        </div>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="flash-msg {{ category }}"><i class="fas fa-{% if category == 'error' %}exclamation-circle{% else %}check-circle{% endif %}"></i> {{ message }}</div>
+            {% endfor %}
+        {% endwith %}
+        <form method="POST">
+            <div class="form-group">
+                <label><i class="fas fa-user"></i> username</label>
+                <div class="input-wrap">
+                    <div class="prefix"><i class="fas fa-user"></i></div>
+                    <div class="line"></div>
+                    <input type="text" name="username" placeholder="Enter admin username" required autofocus>
+                </div>
+            </div>
+            <div class="form-group">
+                <label><i class="fas fa-key"></i> password</label>
+                <div class="input-wrap">
+                    <div class="prefix"><i class="fas fa-lock"></i></div>
+                    <div class="line"></div>
+                    <input type="password" name="password" placeholder="Enter password" required>
+                </div>
+            </div>
+            <div class="error-text" id="loginError">{{ error }}</div>
+            <button type="submit" class="btn-login"><i class="fas fa-unlock-alt"></i> admin login</button>
+        </form>
+        <div class="status-bar">
+            <span class="item"><i class="fas fa-database"></i> firebase</span>
+            <span class="item"><i class="fas fa-clock"></i> {{ remaining_minutes }}m</span>
+            <span class="item"><i class="fas fa-shield-alt"></i> secure</span>
+        </div>
+        <div class="footer-text">⚡ sakil bhai · multi-panel system ⚡</div>
+    </div>
+    <script>
+        document.querySelector('input[name="username"]').focus();
+        document.querySelectorAll('input').forEach(el => {
+            el.addEventListener('input', function() {
+                document.getElementById('loginError').classList.remove('show');
+            });
+        });
+    </script>
+</body>
+</html>
+'''
+
+# ============================================
+# USER PANEL HTML (Same as before - truncated for length)
 # ============================================
 USER_PANEL_HTML = '''
 <!DOCTYPE html>
@@ -1610,365 +2325,7 @@ USER_PANEL_HTML = '''
 '''
 
 # ============================================
-# RESELLER LOGIN PAGE
-# ============================================
-RESELLER_LOGIN_HTML = '''
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>RESELLER LOGIN · SAKIL BHAI</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: #06060a;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow: hidden;
-        }
-        .bg-animation {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 0;
-            overflow: hidden;
-        }
-        .bg-animation .orb {
-            position: absolute;
-            border-radius: 50%;
-            filter: blur(80px);
-            animation: orbFloat 20s ease-in-out infinite;
-        }
-        .bg-animation .orb:nth-child(1) {
-            width: 400px; height: 400px;
-            background: rgba(255, 215, 0, 0.03);
-            top: -100px; left: -100px;
-            animation-delay: 0s;
-        }
-        .bg-animation .orb:nth-child(2) {
-            width: 500px; height: 500px;
-            background: rgba(255, 215, 0, 0.02);
-            bottom: -150px; right: -150px;
-            animation-delay: -5s;
-        }
-        .bg-animation .orb:nth-child(3) {
-            width: 300px; height: 300px;
-            background: rgba(255, 215, 0, 0.015);
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            animation-delay: -10s;
-        }
-        @keyframes orbFloat {
-            0%, 100% { transform: translate(0, 0) scale(1); }
-            33% { transform: translate(30px, -30px) scale(1.1); }
-            66% { transform: translate(-20px, 20px) scale(0.9); }
-        }
-        .login-container {
-            position: relative;
-            z-index: 1;
-            background: rgba(6, 6, 12, 0.92);
-            border: 1px solid rgba(255, 215, 0, 0.15);
-            border-radius: 24px;
-            padding: 48px 40px;
-            max-width: 420px;
-            width: 92%;
-            backdrop-filter: blur(40px);
-            box-shadow: 0 0 80px rgba(255, 215, 0, 0.05), inset 0 0 80px rgba(255, 215, 0, 0.005);
-            animation: containerIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        @keyframes containerIn {
-            0% { opacity: 0; transform: translateY(30px) scale(0.96); }
-            100% { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        .login-container .brand-section {
-            text-align: center;
-            margin-bottom: 32px;
-        }
-        .login-container .brand-section .icon-wrap {
-            display: inline-block;
-            font-size: 32px;
-            color: #ffd700;
-            opacity: 0.5;
-            margin-bottom: 4px;
-        }
-        .login-container .brand-section h1 {
-            font-family: 'Orbitron', monospace;
-            font-size: 22px;
-            font-weight: 800;
-            letter-spacing: 4px;
-            color: #ffffff;
-        }
-        .login-container .brand-section h1 .highlight {
-            color: #ffd700;
-            text-shadow: 0 0 40px rgba(255, 215, 0, 0.2);
-        }
-        .login-container .brand-section .tagline {
-            font-size: 9px;
-            font-weight: 400;
-            letter-spacing: 6px;
-            color: #88ddff;
-            text-transform: uppercase;
-            margin-top: 2px;
-            font-family: 'Orbitron', monospace;
-        }
-        .login-container .brand-section .divider {
-            width: 40px;
-            height: 1px;
-            background: rgba(255, 215, 0, 0.3);
-            margin: 10px auto 0;
-        }
-        .login-container .brand-section .panel-badge {
-            display: inline-block;
-            margin-top: 8px;
-            font-size: 8px;
-            font-family: 'Orbitron', monospace;
-            color: #ffd700;
-            letter-spacing: 4px;
-            border: 1px solid rgba(255,215,0,0.2);
-            padding: 2px 16px;
-            border-radius: 30px;
-        }
-        .form-group { margin-bottom: 16px; }
-        .form-group label {
-            display: block;
-            font-size: 9px;
-            font-weight: 600;
-            color: #88ddff;
-            text-transform: uppercase;
-            letter-spacing: 3px;
-            margin-bottom: 6px;
-            font-family: 'Orbitron', monospace;
-        }
-        .form-group label i { color: #ffd700; margin-right: 6px; }
-        .form-group .input-wrap {
-            display: flex;
-            align-items: center;
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 215, 0, 0.15);
-            border-radius: 12px;
-            transition: all 0.3s ease;
-            overflow: hidden;
-        }
-        .form-group .input-wrap:focus-within {
-            border-color: rgba(255, 215, 0, 0.6);
-            box-shadow: 0 0 30px rgba(255, 215, 0, 0.05);
-        }
-        .form-group .input-wrap .prefix {
-            padding: 12px 0 12px 16px;
-            color: #88ddff;
-            font-size: 13px;
-            width: 38px;
-            text-align: center;
-            font-family: 'Orbitron', monospace;
-        }
-        .form-group .input-wrap .line {
-            width: 1px;
-            height: 20px;
-            background: rgba(255, 215, 0, 0.1);
-        }
-        .form-group .input-wrap input {
-            flex: 1;
-            padding: 12px 16px;
-            background: transparent;
-            border: none;
-            color: #ffffff;
-            font-size: 15px;
-            outline: none;
-            font-family: 'Inter', sans-serif;
-            font-weight: 400;
-            letter-spacing: 0.5px;
-        }
-        .form-group .input-wrap input::placeholder {
-            color: #88ddff;
-            font-size: 13px;
-            font-weight: 300;
-        }
-        .btn-login {
-            width: 100%;
-            padding: 14px;
-            background: rgba(255, 215, 0, 0.05);
-            border: 1px solid rgba(255, 215, 0, 0.2);
-            border-radius: 12px;
-            color: #88ddff;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            font-family: 'Orbitron', monospace;
-            letter-spacing: 4px;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 12px;
-            margin-top: 4px;
-        }
-        .btn-login:hover {
-            border-color: rgba(255, 215, 0, 0.5);
-            color: #ffd700;
-            box-shadow: 0 0 40px rgba(255, 215, 0, 0.05);
-        }
-        .btn-login i { font-size: 14px; color: #ffd700; }
-        .error-text {
-            color: #ff3355;
-            font-size: 11px;
-            padding: 6px 0;
-            display: none;
-            text-align: center;
-            font-family: 'Orbitron', monospace;
-            letter-spacing: 1px;
-        }
-        .error-text.show { display: block; animation: shake 0.4s ease; }
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-4px); }
-            75% { transform: translateX(4px); }
-        }
-        .status-bar {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            margin-top: 18px;
-            padding: 10px 14px;
-            background: rgba(0, 0, 0, 0.15);
-            border-radius: 10px;
-            border: 1px solid rgba(255, 215, 0, 0.05);
-        }
-        .status-bar .item {
-            font-size: 7px;
-            font-weight: 400;
-            color: #88ddff;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            font-family: 'Orbitron', monospace;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-        .status-bar .item i { font-size: 8px; color: #ffd700; }
-        .footer-text {
-            text-align: center;
-            font-size: 6px;
-            color: #88ddff;
-            letter-spacing: 3px;
-            margin-top: 16px;
-            font-family: 'Orbitron', monospace;
-        }
-        .flash-msg {
-            padding: 8px 14px;
-            border-radius: 8px;
-            margin-bottom: 12px;
-            font-size: 9px;
-            font-family: 'Orbitron', monospace;
-            letter-spacing: 1px;
-            background: rgba(0, 255, 102, 0.02);
-            border: 1px solid rgba(0, 255, 102, 0.05);
-            color: #00ff66;
-            text-align: center;
-        }
-        .flash-msg.error { border-color: rgba(255, 51, 85, 0.05); color: #ff3355; }
-        .panel-links {
-            margin-top: 14px;
-            display: flex;
-            justify-content: center;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-        .panel-links a {
-            font-size: 7px;
-            font-family: 'Orbitron', monospace;
-            color: #88ddff;
-            text-decoration: none;
-            letter-spacing: 2px;
-            padding: 3px 12px;
-            border: 1px solid rgba(255,255,255,0.03);
-            border-radius: 20px;
-            transition: all 0.3s ease;
-        }
-        .panel-links a:hover {
-            border-color: rgba(255,215,0,0.2);
-            color: #ffd700;
-        }
-        .panel-links a.user-link { border-color: rgba(0,255,255,0.05); color: #00ffff; }
-        .panel-links a.user-link:hover { border-color: rgba(0,255,255,0.2); color: #00ffff; }
-        .panel-links a.admin-link { border-color: rgba(255,215,0,0.05); color: #ffd700; }
-        .panel-links a.admin-link:hover { border-color: rgba(255,215,0,0.2); color: #ffd700; }
-        @media (max-width: 480px) {
-            .login-container { padding: 32px 22px; }
-            .login-container .brand-section h1 { font-size: 18px; letter-spacing: 2px; }
-            .status-bar { gap: 12px; flex-wrap: wrap; }
-        }
-    </style>
-</head>
-<body>
-    <div class="bg-animation">
-        <div class="orb"></div>
-        <div class="orb"></div>
-        <div class="orb"></div>
-    </div>
-    <div class="login-container">
-        <div class="brand-section">
-            <div class="icon-wrap"><i class="fas fa-store"></i></div>
-            <h1><span class="highlight">RESELLER</span> PANEL</h1>
-            <div class="tagline">premium · reseller management</div>
-            <div class="panel-badge"><i class="fas fa-shield-halved"></i> reseller access</div>
-            <div class="divider"></div>
-        </div>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% for category, message in messages %}
-                <div class="flash-msg {{ category }}"><i class="fas fa-{% if category == 'error' %}exclamation-circle{% else %}check-circle{% endif %}"></i> {{ message }}</div>
-            {% endfor %}
-        {% endwith %}
-        <form method="POST">
-            <div class="form-group">
-                <label><i class="fas fa-user"></i> username</label>
-                <div class="input-wrap">
-                    <div class="prefix"><i class="fas fa-user"></i></div>
-                    <div class="line"></div>
-                    <input type="text" name="username" placeholder="Enter reseller username" required autofocus>
-                </div>
-            </div>
-            <div class="form-group">
-                <label><i class="fas fa-key"></i> password</label>
-                <div class="input-wrap">
-                    <div class="prefix"><i class="fas fa-lock"></i></div>
-                    <div class="line"></div>
-                    <input type="password" name="password" placeholder="Enter password" required>
-                </div>
-            </div>
-            <div class="error-text" id="loginError">{{ error }}</div>
-            <button type="submit" class="btn-login"><i class="fas fa-unlock-alt"></i> reseller login</button>
-        </form>
-        <div class="status-bar">
-            <span class="item"><i class="fas fa-database"></i> firebase</span>
-            <span class="item"><i class="fas fa-clock"></i> {{ remaining_minutes }}m</span>
-            <span class="item"><i class="fas fa-shield-alt"></i> secure</span>
-        </div>
-        <div class="panel-links">
-            <a href="{{ url_for('user_login_page') }}" class="user-link"><i class="fas fa-user"></i> user</a>
-            <a href="{{ url_for('admin_login_page') }}" class="admin-link"><i class="fas fa-crown"></i> admin</a>
-        </div>
-        <div class="footer-text">⚡ sakil bhai · multi-panel system ⚡</div>
-    </div>
-    <script>
-        document.querySelector('input[name="username"]').focus();
-        document.querySelectorAll('input').forEach(el => {
-            el.addEventListener('input', function() {
-                document.getElementById('loginError').classList.remove('show');
-            });
-        });
-    </script>
-</body>
-</html>
-'''
-
-# ============================================
-# RESELLER PANEL
+# RESELLER PANEL HTML (with limit display)
 # ============================================
 RESELLER_PANEL_HTML = '''
 <!DOCTYPE html>
@@ -2048,6 +2405,21 @@ RESELLER_PANEL_HTML = '''
             color: #88ddff; letter-spacing: 2px;
             text-transform: uppercase; margin-top: 2px;
         }
+        .limit-info {
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(0,0,0,0.1); padding: 8px 14px; border-radius: 8px;
+            margin-bottom: 12px; border: 1px solid rgba(255,215,0,0.05);
+        }
+        .limit-info .label {
+            font-size: 7px; font-family: 'Orbitron', monospace;
+            color: #88ddff; letter-spacing: 2px;
+        }
+        .limit-info .value {
+            font-size: 11px; font-family: 'Orbitron', monospace;
+            color: #ffd700;
+        }
+        .limit-info .value.warning { color: #ff3355; }
+        .limit-info .value.success { color: #00ff66; }
         .table-wrap { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; font-size: 11px; }
         thead th {
@@ -2098,6 +2470,9 @@ RESELLER_PANEL_HTML = '''
             transition: all 0.3s ease;
         }
         .add-form .btn-add:hover { border-color: rgba(255,215,0,0.2); color: #ffd700; }
+        .add-form .btn-add:disabled {
+            opacity: 0.3; cursor: not-allowed;
+        }
         .brand-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
         .brand-form input {
             padding: 6px 12px; background: rgba(0,0,0,0.2);
@@ -2133,6 +2508,7 @@ RESELLER_PANEL_HTML = '''
             .brand-form { flex-direction: column; }
             .brand-form input, .brand-form .btn-brand { width: 100%; }
             .card { padding: 12px 14px; }
+            .limit-info { flex-direction: column; gap: 4px; text-align: center; }
         }
     </style>
 </head>
@@ -2165,6 +2541,19 @@ RESELLER_PANEL_HTML = '''
             <div class="stat-box"><div class="num gold">{{ stats.online_users }}</div><div class="label">online now</div></div>
         </div>
 
+        <!-- Limit Info -->
+        <div class="limit-info">
+            <span class="label"><i class="fas fa-users"></i> User Limit</span>
+            <span class="value {% if stats.user_limit_reached %}warning{% else %}success{% endif %}">
+                {{ stats.total_users }} / {{ stats.user_limit }}
+                {% if stats.user_limit_reached %}
+                    <i class="fas fa-exclamation-circle" style="color:#ff3355;"></i> LIMIT REACHED
+                {% endif %}
+            </span>
+            <span class="label"><i class="fas fa-mobile-alt"></i> Device Limit</span>
+            <span class="value success">{{ stats.device_limit }} devices per user</span>
+        </div>
+
         <!-- Brand Settings -->
         <div class="card">
             <div class="card-title"><i class="fas fa-tag"></i> brand settings</div>
@@ -2184,8 +2573,15 @@ RESELLER_PANEL_HTML = '''
                 <input type="text" name="username" placeholder="username" required>
                 <input type="password" name="password" placeholder="password" required>
                 <input type="datetime-local" name="expiry" class="expiry-input" placeholder="expiry (UTC)">
-                <button type="submit" class="btn-add"><i class="fas fa-plus"></i> create</button>
+                <button type="submit" class="btn-add" {% if stats.user_limit_reached %}disabled{% endif %}>
+                    <i class="fas fa-plus"></i> {% if stats.user_limit_reached %}limit reached{% else %}create{% endif %}
+                </button>
             </form>
+            {% if stats.user_limit_reached %}
+            <div style="font-size:7px; color:#ff3355; margin-top:6px; font-family:'Orbitron',monospace; letter-spacing:1px;">
+                <i class="fas fa-exclamation-circle"></i> User limit reached. Upgrade your plan or delete existing users.
+            </div>
+            {% endif %}
         </div>
 
         <!-- User List -->
@@ -2199,6 +2595,7 @@ RESELLER_PANEL_HTML = '''
                             <th>username</th>
                             <th>status</th>
                             <th>expiry</th>
+                            <th>devices</th>
                             <th>last login</th>
                             <th>actions</th>
                         </tr>
@@ -2226,12 +2623,17 @@ RESELLER_PANEL_HTML = '''
                                 {% endif %}
                             </td>
                             <td style="font-size:8px; color:#88ddff;">
+                                {{ udata.sessions|length if udata.sessions else 0 }}
+                                / {{ stats.device_limit }}
+                            </td>
+                            <td style="font-size:8px; color:#88ddff;">
                                 {{ udata.last_login[:10] if udata.last_login else 'never' }}
                             </td>
                             <td>
                                 <div class="actions-cell">
                                     <a href="{{ url_for('reseller_edit_user', username=uname) }}"><i class="fas fa-pen"></i></a>
                                     <a href="{{ url_for('reseller_toggle_user', username=uname) }}"><i class="fas fa-{% if udata.active %}pause{% else %}play{% endif %}"></i></a>
+                                    <a href="{{ url_for('reseller_clear_sessions', username=uname) }}" onclick="return confirm('Clear all sessions for {{ uname }}?')"><i class="fas fa-sign-out-alt"></i></a>
                                     <a href="{{ url_for('reseller_delete_user', username=uname) }}" class="del" onclick="return confirm('delete {{ uname }}?')"><i class="fas fa-trash"></i></a>
                                 </div>
                             </td>
@@ -2252,365 +2654,7 @@ RESELLER_PANEL_HTML = '''
 '''
 
 # ============================================
-# ADMIN LOGIN PAGE
-# ============================================
-ADMIN_LOGIN_HTML = '''
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ADMIN LOGIN · SAKIL BHAI</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: #06060a;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow: hidden;
-        }
-        .bg-animation {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 0;
-            overflow: hidden;
-        }
-        .bg-animation .orb {
-            position: absolute;
-            border-radius: 50%;
-            filter: blur(80px);
-            animation: orbFloat 20s ease-in-out infinite;
-        }
-        .bg-animation .orb:nth-child(1) {
-            width: 400px; height: 400px;
-            background: rgba(0, 255, 255, 0.04);
-            top: -100px; left: -100px;
-            animation-delay: 0s;
-        }
-        .bg-animation .orb:nth-child(2) {
-            width: 500px; height: 500px;
-            background: rgba(0, 255, 255, 0.03);
-            bottom: -150px; right: -150px;
-            animation-delay: -5s;
-        }
-        .bg-animation .orb:nth-child(3) {
-            width: 300px; height: 300px;
-            background: rgba(255, 215, 0, 0.02);
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            animation-delay: -10s;
-        }
-        @keyframes orbFloat {
-            0%, 100% { transform: translate(0, 0) scale(1); }
-            33% { transform: translate(30px, -30px) scale(1.1); }
-            66% { transform: translate(-20px, 20px) scale(0.9); }
-        }
-        .login-container {
-            position: relative;
-            z-index: 1;
-            background: rgba(6, 6, 12, 0.92);
-            border: 1px solid rgba(0, 255, 255, 0.2);
-            border-radius: 24px;
-            padding: 48px 40px;
-            max-width: 420px;
-            width: 92%;
-            backdrop-filter: blur(40px);
-            box-shadow: 0 0 80px rgba(0, 255, 255, 0.08), inset 0 0 80px rgba(0, 255, 255, 0.01);
-            animation: containerIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        @keyframes containerIn {
-            0% { opacity: 0; transform: translateY(30px) scale(0.96); }
-            100% { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        .login-container .brand-section {
-            text-align: center;
-            margin-bottom: 32px;
-        }
-        .login-container .brand-section .icon-wrap {
-            display: inline-block;
-            font-size: 32px;
-            color: #00ffff;
-            opacity: 0.6;
-            margin-bottom: 4px;
-        }
-        .login-container .brand-section h1 {
-            font-family: 'Orbitron', monospace;
-            font-size: 22px;
-            font-weight: 800;
-            letter-spacing: 4px;
-            color: #ffffff;
-        }
-        .login-container .brand-section h1 .highlight {
-            color: #00ffff;
-            text-shadow: 0 0 40px rgba(0, 255, 255, 0.2);
-        }
-        .login-container .brand-section .tagline {
-            font-size: 9px;
-            font-weight: 400;
-            letter-spacing: 6px;
-            color: #88ddff;
-            text-transform: uppercase;
-            margin-top: 2px;
-            font-family: 'Orbitron', monospace;
-        }
-        .login-container .brand-section .divider {
-            width: 40px;
-            height: 1px;
-            background: rgba(0, 255, 255, 0.3);
-            margin: 10px auto 0;
-        }
-        .login-container .brand-section .panel-badge {
-            display: inline-block;
-            margin-top: 8px;
-            font-size: 8px;
-            font-family: 'Orbitron', monospace;
-            color: #00ffff;
-            letter-spacing: 4px;
-            border: 1px solid rgba(0,255,255,0.2);
-            padding: 2px 16px;
-            border-radius: 30px;
-        }
-        .form-group { margin-bottom: 16px; }
-        .form-group label {
-            display: block;
-            font-size: 9px;
-            font-weight: 600;
-            color: #88ddff;
-            text-transform: uppercase;
-            letter-spacing: 3px;
-            margin-bottom: 6px;
-            font-family: 'Orbitron', monospace;
-        }
-        .form-group label i { color: #00ffff; margin-right: 6px; }
-        .form-group .input-wrap {
-            display: flex;
-            align-items: center;
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(0, 255, 255, 0.15);
-            border-radius: 12px;
-            transition: all 0.3s ease;
-            overflow: hidden;
-        }
-        .form-group .input-wrap:focus-within {
-            border-color: rgba(0, 255, 255, 0.6);
-            box-shadow: 0 0 30px rgba(0, 255, 255, 0.05);
-        }
-        .form-group .input-wrap .prefix {
-            padding: 12px 0 12px 16px;
-            color: #88ddff;
-            font-size: 13px;
-            width: 38px;
-            text-align: center;
-            font-family: 'Orbitron', monospace;
-        }
-        .form-group .input-wrap .line {
-            width: 1px;
-            height: 20px;
-            background: rgba(0, 255, 255, 0.1);
-        }
-        .form-group .input-wrap input {
-            flex: 1;
-            padding: 12px 16px;
-            background: transparent;
-            border: none;
-            color: #ffffff;
-            font-size: 15px;
-            outline: none;
-            font-family: 'Inter', sans-serif;
-            font-weight: 400;
-            letter-spacing: 0.5px;
-        }
-        .form-group .input-wrap input::placeholder {
-            color: #88ddff;
-            font-size: 13px;
-            font-weight: 300;
-        }
-        .btn-login {
-            width: 100%;
-            padding: 14px;
-            background: rgba(0, 255, 255, 0.05);
-            border: 1px solid rgba(0, 255, 255, 0.2);
-            border-radius: 12px;
-            color: #88ddff;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            font-family: 'Orbitron', monospace;
-            letter-spacing: 4px;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 12px;
-            margin-top: 4px;
-        }
-        .btn-login:hover {
-            border-color: rgba(0, 255, 255, 0.5);
-            color: #00ffff;
-            box-shadow: 0 0 40px rgba(0, 255, 255, 0.05);
-        }
-        .btn-login i { font-size: 14px; color: #00ffff; }
-        .error-text {
-            color: #ff3355;
-            font-size: 11px;
-            padding: 6px 0;
-            display: none;
-            text-align: center;
-            font-family: 'Orbitron', monospace;
-            letter-spacing: 1px;
-        }
-        .error-text.show { display: block; animation: shake 0.4s ease; }
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-4px); }
-            75% { transform: translateX(4px); }
-        }
-        .status-bar {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            margin-top: 18px;
-            padding: 10px 14px;
-            background: rgba(0, 0, 0, 0.15);
-            border-radius: 10px;
-            border: 1px solid rgba(0, 255, 255, 0.05);
-        }
-        .status-bar .item {
-            font-size: 7px;
-            font-weight: 400;
-            color: #88ddff;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            font-family: 'Orbitron', monospace;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-        .status-bar .item i { font-size: 8px; color: #00ffff; }
-        .footer-text {
-            text-align: center;
-            font-size: 6px;
-            color: #88ddff;
-            letter-spacing: 3px;
-            margin-top: 16px;
-            font-family: 'Orbitron', monospace;
-        }
-        .flash-msg {
-            padding: 8px 14px;
-            border-radius: 8px;
-            margin-bottom: 12px;
-            font-size: 9px;
-            font-family: 'Orbitron', monospace;
-            letter-spacing: 1px;
-            background: rgba(0, 255, 102, 0.02);
-            border: 1px solid rgba(0, 255, 102, 0.05);
-            color: #00ff66;
-            text-align: center;
-        }
-        .flash-msg.error { border-color: rgba(255, 51, 85, 0.05); color: #ff3355; }
-        .panel-links {
-            margin-top: 14px;
-            display: flex;
-            justify-content: center;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-        .panel-links a {
-            font-size: 7px;
-            font-family: 'Orbitron', monospace;
-            color: #88ddff;
-            text-decoration: none;
-            letter-spacing: 2px;
-            padding: 3px 12px;
-            border: 1px solid rgba(255,255,255,0.03);
-            border-radius: 20px;
-            transition: all 0.3s ease;
-        }
-        .panel-links a:hover {
-            border-color: rgba(0,255,255,0.2);
-            color: #00ffff;
-        }
-        .panel-links a.user-link { border-color: rgba(0,255,255,0.05); color: #00ffff; }
-        .panel-links a.user-link:hover { border-color: rgba(0,255,255,0.2); color: #00ffff; }
-        .panel-links a.reseller-link { border-color: rgba(255,215,0,0.05); color: #ffd700; }
-        .panel-links a.reseller-link:hover { border-color: rgba(255,215,0,0.2); color: #ffd700; }
-        @media (max-width: 480px) {
-            .login-container { padding: 32px 22px; }
-            .login-container .brand-section h1 { font-size: 18px; letter-spacing: 2px; }
-            .status-bar { gap: 12px; flex-wrap: wrap; }
-        }
-    </style>
-</head>
-<body>
-    <div class="bg-animation">
-        <div class="orb"></div>
-        <div class="orb"></div>
-        <div class="orb"></div>
-    </div>
-    <div class="login-container">
-        <div class="brand-section">
-            <div class="icon-wrap"><i class="fas fa-crown"></i></div>
-            <h1><span class="highlight">ADMIN</span> PANEL</h1>
-            <div class="tagline">main admin · full control</div>
-            <div class="panel-badge"><i class="fas fa-shield-halved"></i> admin access</div>
-            <div class="divider"></div>
-        </div>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% for category, message in messages %}
-                <div class="flash-msg {{ category }}"><i class="fas fa-{% if category == 'error' %}exclamation-circle{% else %}check-circle{% endif %}"></i> {{ message }}</div>
-            {% endfor %}
-        {% endwith %}
-        <form method="POST">
-            <div class="form-group">
-                <label><i class="fas fa-user"></i> username</label>
-                <div class="input-wrap">
-                    <div class="prefix"><i class="fas fa-user"></i></div>
-                    <div class="line"></div>
-                    <input type="text" name="username" placeholder="Enter admin username" required autofocus>
-                </div>
-            </div>
-            <div class="form-group">
-                <label><i class="fas fa-key"></i> password</label>
-                <div class="input-wrap">
-                    <div class="prefix"><i class="fas fa-lock"></i></div>
-                    <div class="line"></div>
-                    <input type="password" name="password" placeholder="Enter password" required>
-                </div>
-            </div>
-            <div class="error-text" id="loginError">{{ error }}</div>
-            <button type="submit" class="btn-login"><i class="fas fa-unlock-alt"></i> admin login</button>
-        </form>
-        <div class="status-bar">
-            <span class="item"><i class="fas fa-database"></i> firebase</span>
-            <span class="item"><i class="fas fa-clock"></i> {{ remaining_minutes }}m</span>
-            <span class="item"><i class="fas fa-shield-alt"></i> secure</span>
-        </div>
-        <div class="panel-links">
-            <a href="{{ url_for('user_login_page') }}" class="user-link"><i class="fas fa-user"></i> user</a>
-            <a href="{{ url_for('reseller_login_page') }}" class="reseller-link"><i class="fas fa-store"></i> reseller</a>
-        </div>
-        <div class="footer-text">⚡ sakil bhai · multi-panel system ⚡</div>
-    </div>
-    <script>
-        document.querySelector('input[name="username"]').focus();
-        document.querySelectorAll('input').forEach(el => {
-            el.addEventListener('input', function() {
-                document.getElementById('loginError').classList.remove('show');
-            });
-        });
-    </script>
-</body>
-</html>
-'''
-
-# ============================================
-# ADMIN PANEL
+# ADMIN PANEL HTML (with reseller limits)
 # ============================================
 ADMIN_PANEL_HTML = '''
 <!DOCTYPE html>
@@ -2784,6 +2828,8 @@ ADMIN_PANEL_HTML = '''
         .footer-text { text-align: center; font-size: 6px; color: #88ddff; letter-spacing: 3px; margin-top: 10px; font-family: 'Orbitron', monospace; }
         .expiry-input { padding: 6px 12px; background: rgba(0,0,0,0.2); border: 1px solid rgba(0,255,255,0.05); border-radius: 8px; color: #fff; font-size: 11px; outline: none; font-family: 'Inter', sans-serif; }
         .expiry-input:focus { border-color: rgba(0,255,255,0.15); }
+        .limit-input { padding: 6px 12px; background: rgba(0,0,0,0.2); border: 1px solid rgba(0,255,255,0.05); border-radius: 8px; color: #fff; font-size: 11px; outline: none; font-family: 'Inter', sans-serif; max-width: 80px; }
+        .limit-input:focus { border-color: rgba(0,255,255,0.15); }
         @media (max-width: 600px) {
             .header .title h1 { font-size: 16px; }
             .stats { grid-template-columns: repeat(2, 1fr); }
@@ -2792,6 +2838,7 @@ ADMIN_PANEL_HTML = '''
             .expiry-form { flex-direction: column; align-items: stretch; }
             .expiry-form input[type="datetime-local"] { width: 100%; }
             .card { padding: 12px 14px; }
+            .limit-input { max-width: 100%; }
         }
     </style>
 </head>
@@ -2836,16 +2883,21 @@ ADMIN_PANEL_HTML = '''
             <div id="expiryMsg" style="margin-top:8px; font-size:9px; color:#88ddff;"></div>
         </div>
 
-        <!-- Add Reseller -->
+        <!-- Add Reseller with Limits -->
         <div class="card">
             <div class="card-title"><i class="fas fa-store"></i> create reseller</div>
             <form method="POST" action="{{ url_for('admin_add_reseller') }}" class="add-form">
                 <input type="text" name="username" placeholder="reseller username" required>
                 <input type="password" name="password" placeholder="password" required>
-                <input type="text" name="brand_name" placeholder="brand name (e.g. PRIYANGSHU)" required>
+                <input type="text" name="brand_name" placeholder="brand name" required>
+                <input type="number" name="user_limit" placeholder="user limit" value="10" class="limit-input" min="1" max="999">
+                <input type="number" name="device_limit" placeholder="device limit" value="1" class="limit-input" min="1" max="10">
                 <input type="datetime-local" name="expiry" class="expiry-input" placeholder="expiry (UTC)">
                 <button type="submit" class="btn-add"><i class="fas fa-plus"></i> create reseller</button>
             </form>
+            <div style="font-size:7px; color:#88ddff; margin-top:6px; font-family:'Orbitron',monospace; letter-spacing:1px;">
+                <i class="fas fa-info-circle"></i> User limit: max users reseller can create | Device limit: max devices per user
+            </div>
         </div>
 
         <!-- Add User (Main Admin can also add users) -->
@@ -2876,6 +2928,8 @@ ADMIN_PANEL_HTML = '''
                             <th>username</th>
                             <th>brand</th>
                             <th>users</th>
+                            <th>user limit</th>
+                            <th>device limit</th>
                             <th>expiry</th>
                             <th>status</th>
                             <th>actions</th>
@@ -2887,6 +2941,8 @@ ADMIN_PANEL_HTML = '''
                             <td style="color:#ffd700; font-weight:500;">{{ rname }}</td>
                             <td style="color:#fff;">{{ rdata.brand_name }}</td>
                             <td style="color:#88ddff;">{{ rdata.user_count or 0 }}</td>
+                            <td style="color:#88ddff;">{{ rdata.user_limit or 10 }}</td>
+                            <td style="color:#88ddff;">{{ rdata.device_limit or 1 }}</td>
                             <td style="font-size:8px; color:#88ddff;">
                                 {% if rdata.expiry_utc %}
                                     {{ rdata.expiry_utc[:10] }}
@@ -2925,6 +2981,7 @@ ADMIN_PANEL_HTML = '''
                             <th>reseller</th>
                             <th>status</th>
                             <th>expiry</th>
+                            <th>devices</th>
                             <th>actions</th>
                         </tr>
                     </thead>
@@ -2945,10 +3002,14 @@ ADMIN_PANEL_HTML = '''
                                     never
                                 {% endif %}
                             </td>
+                            <td style="font-size:8px; color:#88ddff;">
+                                {{ udata.sessions|length if udata.sessions else 0 }}
+                            </td>
                             <td>
                                 <div class="actions-cell">
                                     <a href="{{ url_for('admin_edit_user', username=uname) }}"><i class="fas fa-pen"></i></a>
                                     <a href="{{ url_for('admin_toggle_user', username=uname) }}"><i class="fas fa-{% if udata.active %}pause{% else %}play{% endif %}"></i></a>
+                                    <a href="{{ url_for('admin_clear_sessions', username=uname) }}" onclick="return confirm('Clear all sessions for {{ uname }}?')"><i class="fas fa-sign-out-alt"></i></a>
                                     {% if uname != 'sakil2026' %}
                                     <a href="{{ url_for('admin_delete_user', username=uname) }}" class="del" onclick="return confirm('delete {{ uname }}?')"><i class="fas fa-trash"></i></a>
                                     {% endif %}
@@ -3009,6 +3070,7 @@ def user_login_page():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
+        device_id = request.form.get('device_id', request.remote_addr)
 
         if verify_user(username, password):
             role = get_user_role(username)
@@ -3023,9 +3085,19 @@ def user_login_page():
                 flash("Your subscription has expired.", "error")
                 return redirect(url_for('user_login_page'))
 
+            # Check device limit
+            can_login, msg = can_login(username, device_id)
+            if not can_login:
+                flash(msg, "error")
+                return redirect(url_for('user_login_page'))
+
             session["user_auth"] = True
             session["user_username"] = username
             session["user_role"] = role
+            session["user_device_id"] = device_id
+
+            # Add session
+            add_session(username, device_id, request.headers.get('User-Agent', 'Unknown'))
 
             users = get_users()
             users[username]["last_login"] = datetime.datetime.utcnow().isoformat()
@@ -3042,9 +3114,14 @@ def user_login_page():
 
 @app.route('/user-logout')
 def user_logout():
+    username = session.get("user_username")
+    device_id = session.get("user_device_id")
+    if username:
+        remove_session(username, device_id)
     session.pop("user_auth", None)
     session.pop("user_username", None)
     session.pop("user_role", None)
+    session.pop("user_device_id", None)
     return redirect(url_for('user_login_page'))
 
 @app.route('/user-dashboard')
@@ -3120,6 +3197,10 @@ def reseller_dashboard():
     brand = resellers.get(username, {}).get("brand_name", username.upper())
     users = get_users()
     my_users = {u: d for u, d in users.items() if d.get("reseller_id") == username}
+    
+    # Get limits
+    user_limit = resellers.get(username, {}).get("user_limit", 10)
+    device_limit = resellers.get(username, {}).get("device_limit", 1)
 
     total = len(my_users)
     active = 0
@@ -3146,7 +3227,10 @@ def reseller_dashboard():
         "total_users": total,
         "active_users": active,
         "inactive_users": inactive,
-        "online_users": online
+        "online_users": online,
+        "user_limit": user_limit,
+        "device_limit": device_limit,
+        "user_limit_reached": total >= user_limit
     }
 
     return render_template_string(RESELLER_PANEL_HTML,
@@ -3193,13 +3277,22 @@ def reseller_add_user():
         flash("Username already exists", "error")
         return redirect(url_for('reseller_dashboard'))
 
+    # Check user limit
+    resellers = get_resellers()
+    user_limit = resellers.get(reseller_username, {}).get("user_limit", 10)
+    current_count = get_user_count(reseller_username)
+    if current_count >= user_limit:
+        flash(f"User limit reached! ({user_limit} users allowed)", "error")
+        return redirect(url_for('reseller_dashboard'))
+
     users[username] = {
         "password": hashlib.sha256(password.encode()).hexdigest(),
         "role": "user",
         "active": True,
         "created": datetime.datetime.utcnow().isoformat(),
         "created_by": reseller_username,
-        "reseller_id": reseller_username
+        "reseller_id": reseller_username,
+        "sessions": []
     }
 
     if expiry_str:
@@ -3211,7 +3304,6 @@ def reseller_add_user():
             return redirect(url_for('reseller_dashboard'))
 
     if save_users(users):
-        resellers = get_resellers()
         if reseller_username in resellers:
             resellers[reseller_username]["user_count"] = len([u for u, d in users.items() if d.get("reseller_id") == reseller_username and d.get("active")])
             save_resellers(resellers)
@@ -3257,6 +3349,23 @@ def reseller_delete_user(username):
         flash(f"User '{username}' deleted", "success")
     else:
         flash("Error deleting", "error")
+    return redirect(url_for('reseller_dashboard'))
+
+@app.route('/reseller/clear-sessions/<username>')
+@reseller_session_required
+def reseller_clear_sessions(username):
+    reseller_username = session.get("reseller_username")
+    users = get_users()
+    if username not in users:
+        flash("User not found", "error")
+        return redirect(url_for('reseller_dashboard'))
+    if users[username].get("reseller_id") != reseller_username:
+        flash("Not your user", "error")
+        return redirect(url_for('reseller_dashboard'))
+
+    users[username]["sessions"] = []
+    save_users(users)
+    flash(f"Sessions cleared for '{username}'", "success")
     return redirect(url_for('reseller_dashboard'))
 
 @app.route('/reseller/edit/<username>', methods=['GET', 'POST'])
@@ -3459,6 +3568,8 @@ def admin_add_reseller():
     username = request.form.get('username', '').strip()
     password = request.form.get('password', '')
     brand_name = request.form.get('brand_name', '').strip()
+    user_limit = request.form.get('user_limit', 10)
+    device_limit = request.form.get('device_limit', 1)
     expiry_str = request.form.get('expiry', '')
 
     if not username or not password or not brand_name:
@@ -3475,7 +3586,8 @@ def admin_add_reseller():
         "role": "reseller",
         "active": True,
         "created": datetime.datetime.utcnow().isoformat(),
-        "created_by": "main_admin"
+        "created_by": "main_admin",
+        "sessions": []
     }
 
     if expiry_str:
@@ -3494,11 +3606,13 @@ def admin_add_reseller():
         "created": datetime.datetime.utcnow().isoformat(),
         "active": True,
         "user_count": 0,
+        "user_limit": int(user_limit),
+        "device_limit": int(device_limit),
         "expiry_utc": users[username].get("expiry_utc")
     }
     save_resellers(resellers)
 
-    flash(f"Reseller '{username}' created with brand '{brand_name}'", "success")
+    flash(f"Reseller '{username}' created with brand '{brand_name}' (User limit: {user_limit}, Device limit: {device_limit})", "success")
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/toggle-reseller/<username>')
@@ -3547,6 +3661,8 @@ def admin_edit_reseller(username):
     if request.method == 'POST':
         brand_name = request.form.get('brand_name', '').strip()
         new_password = request.form.get('password', '').strip()
+        user_limit = request.form.get('user_limit', 10)
+        device_limit = request.form.get('device_limit', 1)
         expiry_str = request.form.get('expiry', '')
 
         if brand_name:
@@ -3555,6 +3671,10 @@ def admin_edit_reseller(username):
             if username in users:
                 users[username]["password"] = hashlib.sha256(new_password.encode()).hexdigest()
                 save_users(users)
+        if user_limit:
+            resellers[username]["user_limit"] = int(user_limit)
+        if device_limit:
+            resellers[username]["device_limit"] = int(device_limit)
         if expiry_str:
             try:
                 dt = datetime.datetime.fromisoformat(expiry_str)
@@ -3576,6 +3696,8 @@ def admin_edit_reseller(username):
         return redirect(url_for('admin_dashboard'))
 
     brand_name = resellers[username].get("brand_name", username.upper())
+    user_limit = resellers[username].get("user_limit", 10)
+    device_limit = resellers[username].get("device_limit", 1)
     expiry_local = ""
     if resellers[username].get("expiry_utc"):
         try:
@@ -3590,7 +3712,7 @@ def admin_edit_reseller(username):
     <style>
         *{{margin:0;padding:0;box-sizing:border-box;}}
         body{{background:#06060a;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:'Inter',sans-serif;}}
-        .box{{background:rgba(6,6,12,0.95);border:1px solid rgba(0,255,255,0.1);border-radius:20px;padding:30px;max-width:380px;width:92%;}}
+        .box{{background:rgba(6,6,12,0.95);border:1px solid rgba(0,255,255,0.1);border-radius:20px;padding:30px;max-width:400px;width:92%;}}
         h1{{font-family:'Orbitron',monospace;font-size:18px;font-weight:700;color:#fff;letter-spacing:2px;text-align:center;}}
         h1 .hl{{color:#00ffff;}}
         .sub{{text-align:center;font-size:8px;font-family:'Orbitron',monospace;color:#88ddff;letter-spacing:3px;margin-bottom:16px;}}
@@ -3602,6 +3724,7 @@ def admin_edit_reseller(username):
         .btn:hover{{border-color:rgba(0,255,255,0.2);color:#00ffff;}}
         .back{{display:block;text-align:center;font-size:8px;font-family:'Orbitron',monospace;color:#88ddff;text-decoration:none;margin-top:10px;letter-spacing:2px;transition:all 0.3s ease;}}
         .back:hover{{color:#00ffff;}}
+        .limit-input{{padding:6px 12px;background:rgba(0,0,0,0.2);border:1px solid rgba(0,255,255,0.05);border-radius:8px;color:#fff;font-size:13px;outline:none;font-family:'Inter',sans-serif;margin-top:2px;width:100%;}}
     </style>
     </head>
     <body>
@@ -3616,6 +3739,14 @@ def admin_edit_reseller(username):
             <div class="form-group">
                 <label><i class="fas fa-key"></i> new password (optional)</label>
                 <input type="password" name="password" placeholder="leave blank to keep">
+            </div>
+            <div class="form-group">
+                <label><i class="fas fa-users"></i> user limit</label>
+                <input type="number" name="user_limit" value="{user_limit}" class="limit-input" min="1" max="999">
+            </div>
+            <div class="form-group">
+                <label><i class="fas fa-mobile-alt"></i> device limit</label>
+                <input type="number" name="device_limit" value="{device_limit}" class="limit-input" min="1" max="10">
             </div>
             <div class="form-group">
                 <label><i class="fas fa-clock"></i> expiry (UTC)</label>
@@ -3652,12 +3783,19 @@ def admin_add_user():
         "role": "user",
         "active": True,
         "created": datetime.datetime.utcnow().isoformat(),
-        "created_by": "main_admin"
+        "created_by": "main_admin",
+        "sessions": []
     }
 
     if reseller_id:
         resellers = get_resellers()
         if reseller_id in resellers:
+            # Check user limit for reseller
+            user_limit = resellers[reseller_id].get("user_limit", 10)
+            current_count = get_user_count(reseller_id)
+            if current_count >= user_limit:
+                flash(f"Reseller '{reseller_id}' has reached user limit ({user_limit})", "error")
+                return redirect(url_for('admin_dashboard'))
             users[username]["reseller_id"] = reseller_id
             users[username]["created_by"] = reseller_id
 
@@ -3711,6 +3849,18 @@ def admin_delete_user(username):
     del users[username]
     save_users(users)
     flash(f"User '{username}' deleted", "success")
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/clear-sessions/<username>')
+@admin_session_required
+def admin_clear_sessions(username):
+    users = get_users()
+    if username not in users:
+        flash("User not found", "error")
+        return redirect(url_for('admin_dashboard'))
+    users[username]["sessions"] = []
+    save_users(users)
+    flash(f"Sessions cleared for '{username}'", "success")
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/edit/<username>', methods=['GET', 'POST'])
@@ -3911,10 +4061,10 @@ if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5000))
     print("="*60)
-    print("⚡ SAKIL BHAI - MULTI-PANEL SYSTEM v11.0")
-    print("🔥 SEPARATE PANELS · SEPARATE LOGINS")
+    print("⚡ SAKIL BHAI - MULTI-PANEL SYSTEM v13.0")
+    print("🔥 USER LIMIT + DEVICE LIMIT CONTROL")
     print("📍 PERFECT LOCATION TRACKING - RED BORDER")
-    print("✅ FIREBASE ADMIN SDK · NO DEPENDENCY CONFLICT")
+    print("✅ RESELLER BRAND CUSTOMIZATION")
     print("="*60)
     print(f"✅ User Login:     http://0.0.0.0:{port}/user-login")
     print(f"✅ User Panel:     http://0.0.0.0:{port}/user-dashboard")
@@ -3926,13 +4076,13 @@ if __name__ == '__main__':
     print("🔑 Default Main Admin: sakil2026 / sakil2026")
     print("📁 Firebase: sakil-paid-hack-sell-1342007")
     print("="*60)
-    print("💡 Separate Panel System:")
-    print("   - Each panel has its own login page")
-    print("   - Users see reseller's brand name")
-    print("   - Resellers manage their own users")
-    print("   - Main admin controls everything")
-    print("   - Sessions are independent per panel")
-    print("   - Ready for Vercel, Railway, PythonAnywhere, etc.")
+    print("💡 New Features:")
+    print("   - Separate login URLs (no panel links)")
+    print("   - Reseller user limit control")
+    print("   - Device limit per user")
+    print("   - Active session tracking")
+    print("   - Clear sessions option")
+    print("   - Brand customization per reseller")
     print("="*60)
 
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
