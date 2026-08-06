@@ -3,8 +3,8 @@
 
 """
 ============================================
-SAKIL BHAI - MULTI-PANEL SYSTEM v13.0
-🔥 USER LIMIT + DEVICE LIMIT CONTROL
+SAKIL BHAI - MULTI-PANEL SYSTEM v14.0
+🔥 PER-USER DEVICE LIMIT CONTROL
 📍 PERFECT LOCATION TRACKING - RED BORDER
 ✅ RESELLER BRAND CUSTOMIZATION
 ============================================
@@ -135,7 +135,8 @@ def get_users():
                 "active": True,
                 "created": datetime.datetime.utcnow().isoformat(),
                 "created_by": "system",
-                "sessions": []  # Track active sessions
+                "sessions": [],
+                "device_limit": 5
             }
         }
         fb_set("users", users)
@@ -250,22 +251,25 @@ def get_user_sessions(username):
         return []
     return users[username].get("sessions", [])
 
-def get_device_limit(username):
+def get_user_device_limit(username):
     users = get_users()
     if username not in users:
-        return 0
-    reseller_id = users[username].get("reseller_id")
-    if reseller_id:
-        resellers = get_resellers()
-        if reseller_id in resellers:
-            return resellers[reseller_id].get("device_limit", 1)
-    return 1  # Default 1 device
+        return 1
+    return users[username].get("device_limit", 1)
+
+def set_user_device_limit(username, limit):
+    users = get_users()
+    if username not in users:
+        return False
+    users[username]["device_limit"] = int(limit)
+    save_users(users)
+    return True
 
 def get_user_limit(reseller_username):
     resellers = get_resellers()
     if reseller_username in resellers:
         return resellers[reseller_username].get("user_limit", 10)
-    return 10  # Default 10 users
+    return 10
 
 def get_user_count(reseller_username):
     users = get_users()
@@ -281,7 +285,7 @@ def can_login(username, device_id):
         return False, "User not found"
     
     sessions = users[username].get("sessions", [])
-    device_limit = get_device_limit(username)
+    device_limit = users[username].get("device_limit", 1)
     
     # Check if this device already has a session
     for session in sessions:
@@ -1366,7 +1370,7 @@ ADMIN_LOGIN_HTML = '''
 '''
 
 # ============================================
-# USER PANEL HTML (Same as before - truncated for length)
+# USER PANEL HTML (with device info)
 # ============================================
 USER_PANEL_HTML = '''
 <!DOCTYPE html>
@@ -1900,6 +1904,18 @@ USER_PANEL_HTML = '''
         .footer .tricolor .saffron { width: 33.33%; background: #FF9933; }
         .footer .tricolor .white { width: 33.33%; background: #FFFFFF; }
         .footer .tricolor .green { width: 33.34%; background: #138808; }
+        .device-info {
+            display: flex; justify-content: center; gap: 16px;
+            padding: 6px 14px; margin-top: 6px;
+            border: 1px solid rgba(0,255,255,0.03);
+            border-radius: 8px; background: rgba(0,0,0,0.05);
+            flex-wrap: wrap;
+        }
+        .device-info .item {
+            font-size: 7px; font-family: 'Orbitron', monospace;
+            color: #88ddff; letter-spacing: 1px;
+        }
+        .device-info .item i { color: #00ffff; font-size: 8px; margin-right: 3px; }
         ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-track { background: #06060a; }
         ::-webkit-scrollbar-thumb { background: rgba(0,255,255,0.05); border-radius: 10px; }
@@ -1963,6 +1979,9 @@ USER_PANEL_HTML = '''
                 <img src="https://i.postimg.cc/1VBJWPhR/IMG-20260724-232723-958.webp" alt="{{ brand }}" draggable="false">
                 <h2><span class="hl">number</span> information</h2>
                 <div class="sub"><i class="fas fa-circle"></i> premium intelligence system</div>
+                <div class="device-info">
+                    <span class="item"><i class="fas fa-mobile-alt"></i> Devices: {{ active_devices }} / {{ device_limit }}</span>
+                </div>
             </div>
             <div class="card-body">
                 <form id="trackForm">
@@ -2325,7 +2344,7 @@ USER_PANEL_HTML = '''
 '''
 
 # ============================================
-# RESELLER PANEL HTML (with limit display)
+# RESELLER PANEL HTML (with device limit per user)
 # ============================================
 RESELLER_PANEL_HTML = '''
 <!DOCTYPE html>
@@ -2409,6 +2428,8 @@ RESELLER_PANEL_HTML = '''
             display: flex; justify-content: space-between; align-items: center;
             background: rgba(0,0,0,0.1); padding: 8px 14px; border-radius: 8px;
             margin-bottom: 12px; border: 1px solid rgba(255,215,0,0.05);
+            flex-wrap: wrap;
+            gap: 6px;
         }
         .limit-info .label {
             font-size: 7px; font-family: 'Orbitron', monospace;
@@ -2500,6 +2521,8 @@ RESELLER_PANEL_HTML = '''
         .footer-text { text-align: center; font-size: 6px; color: #88ddff; letter-spacing: 3px; margin-top: 10px; font-family: 'Orbitron', monospace; }
         .expiry-input { padding: 6px 12px; background: rgba(0,0,0,0.2); border: 1px solid rgba(0,255,255,0.05); border-radius: 8px; color: #fff; font-size: 11px; outline: none; font-family: 'Inter', sans-serif; }
         .expiry-input:focus { border-color: rgba(255,215,0,0.15); }
+        .limit-input { padding: 6px 12px; background: rgba(0,0,0,0.2); border: 1px solid rgba(0,255,255,0.05); border-radius: 8px; color: #fff; font-size: 11px; outline: none; font-family: 'Inter', sans-serif; max-width: 80px; }
+        .limit-input:focus { border-color: rgba(255,215,0,0.15); }
         @media (max-width: 600px) {
             .header .title h1 { font-size: 15px; }
             .stats { grid-template-columns: repeat(2, 1fr); }
@@ -2509,6 +2532,7 @@ RESELLER_PANEL_HTML = '''
             .brand-form input, .brand-form .btn-brand { width: 100%; }
             .card { padding: 12px 14px; }
             .limit-info { flex-direction: column; gap: 4px; text-align: center; }
+            .limit-input { max-width: 100%; }
         }
     </style>
 </head>
@@ -2550,8 +2574,6 @@ RESELLER_PANEL_HTML = '''
                     <i class="fas fa-exclamation-circle" style="color:#ff3355;"></i> LIMIT REACHED
                 {% endif %}
             </span>
-            <span class="label"><i class="fas fa-mobile-alt"></i> Device Limit</span>
-            <span class="value success">{{ stats.device_limit }} devices per user</span>
         </div>
 
         <!-- Brand Settings -->
@@ -2572,11 +2594,15 @@ RESELLER_PANEL_HTML = '''
             <form method="POST" action="{{ url_for('reseller_add_user') }}" class="add-form">
                 <input type="text" name="username" placeholder="username" required>
                 <input type="password" name="password" placeholder="password" required>
+                <input type="number" name="device_limit" placeholder="devices" value="1" class="limit-input" min="1" max="10">
                 <input type="datetime-local" name="expiry" class="expiry-input" placeholder="expiry (UTC)">
                 <button type="submit" class="btn-add" {% if stats.user_limit_reached %}disabled{% endif %}>
                     <i class="fas fa-plus"></i> {% if stats.user_limit_reached %}limit reached{% else %}create{% endif %}
                 </button>
             </form>
+            <div style="font-size:7px; color:#88ddff; margin-top:6px; font-family:'Orbitron',monospace; letter-spacing:1px;">
+                <i class="fas fa-info-circle"></i> Device limit: how many devices can login with this user
+            </div>
             {% if stats.user_limit_reached %}
             <div style="font-size:7px; color:#ff3355; margin-top:6px; font-family:'Orbitron',monospace; letter-spacing:1px;">
                 <i class="fas fa-exclamation-circle"></i> User limit reached. Upgrade your plan or delete existing users.
@@ -2594,8 +2620,9 @@ RESELLER_PANEL_HTML = '''
                         <tr>
                             <th>username</th>
                             <th>status</th>
-                            <th>expiry</th>
                             <th>devices</th>
+                            <th>device limit</th>
+                            <th>expiry</th>
                             <th>last login</th>
                             <th>actions</th>
                         </tr>
@@ -2616,15 +2643,17 @@ RESELLER_PANEL_HTML = '''
                                 {% endif %}
                             </td>
                             <td style="font-size:8px; color:#88ddff;">
+                                {{ udata.sessions|length if udata.sessions else 0 }}
+                            </td>
+                            <td style="font-size:8px; color:#88ddff;">
+                                {{ udata.device_limit or 1 }}
+                            </td>
+                            <td style="font-size:8px; color:#88ddff;">
                                 {% if udata.expiry_utc %}
                                     {{ udata.expiry_utc[:10] }} {{ udata.expiry_utc[11:16] }}
                                 {% else %}
                                     never
                                 {% endif %}
-                            </td>
-                            <td style="font-size:8px; color:#88ddff;">
-                                {{ udata.sessions|length if udata.sessions else 0 }}
-                                / {{ stats.device_limit }}
                             </td>
                             <td style="font-size:8px; color:#88ddff;">
                                 {{ udata.last_login[:10] if udata.last_login else 'never' }}
@@ -2654,7 +2683,7 @@ RESELLER_PANEL_HTML = '''
 '''
 
 # ============================================
-# ADMIN PANEL HTML (with reseller limits)
+# ADMIN PANEL HTML (with device limit)
 # ============================================
 ADMIN_PANEL_HTML = '''
 <!DOCTYPE html>
@@ -2883,7 +2912,7 @@ ADMIN_PANEL_HTML = '''
             <div id="expiryMsg" style="margin-top:8px; font-size:9px; color:#88ddff;"></div>
         </div>
 
-        <!-- Add Reseller with Limits -->
+        <!-- Add Reseller -->
         <div class="card">
             <div class="card-title"><i class="fas fa-store"></i> create reseller</div>
             <form method="POST" action="{{ url_for('admin_add_reseller') }}" class="add-form">
@@ -2896,11 +2925,11 @@ ADMIN_PANEL_HTML = '''
                 <button type="submit" class="btn-add"><i class="fas fa-plus"></i> create reseller</button>
             </form>
             <div style="font-size:7px; color:#88ddff; margin-top:6px; font-family:'Orbitron',monospace; letter-spacing:1px;">
-                <i class="fas fa-info-circle"></i> User limit: max users reseller can create | Device limit: max devices per user
+                <i class="fas fa-info-circle"></i> User limit: max users reseller can create | Device limit: default devices per user
             </div>
         </div>
 
-        <!-- Add User (Main Admin can also add users) -->
+        <!-- Add User -->
         <div class="card">
             <div class="card-title"><i class="fas fa-user-plus"></i> add user (direct)</div>
             <form method="POST" action="{{ url_for('admin_add_user') }}" class="add-form">
@@ -2912,9 +2941,13 @@ ADMIN_PANEL_HTML = '''
                     <option value="{{ r }}">{{ r }} ({{ resellers_data[r].brand_name if resellers_data[r] else r }})</option>
                     {% endfor %}
                 </select>
+                <input type="number" name="device_limit" placeholder="devices" value="1" class="limit-input" min="1" max="10">
                 <input type="datetime-local" name="expiry" class="expiry-input" placeholder="expiry (UTC)">
                 <button type="submit" class="btn-add"><i class="fas fa-plus"></i> add user</button>
             </form>
+            <div style="font-size:7px; color:#88ddff; margin-top:6px; font-family:'Orbitron',monospace; letter-spacing:1px;">
+                <i class="fas fa-info-circle"></i> Device limit: how many devices can login with this user
+            </div>
         </div>
 
         <!-- All Resellers -->
@@ -2980,8 +3013,9 @@ ADMIN_PANEL_HTML = '''
                             <th>role</th>
                             <th>reseller</th>
                             <th>status</th>
-                            <th>expiry</th>
                             <th>devices</th>
+                            <th>device limit</th>
+                            <th>expiry</th>
                             <th>actions</th>
                         </tr>
                     </thead>
@@ -2996,14 +3030,17 @@ ADMIN_PANEL_HTML = '''
                             <td style="font-size:8px; color:#88ddff;">{{ udata.reseller_id or 'direct' }}</td>
                             <td><span class="badge {% if udata.active %}active{% else %}inactive{% endif %}">{{ 'active' if udata.active else 'inactive' }}</span></td>
                             <td style="font-size:8px; color:#88ddff;">
+                                {{ udata.sessions|length if udata.sessions else 0 }}
+                            </td>
+                            <td style="font-size:8px; color:#88ddff;">
+                                {{ udata.device_limit or 1 }}
+                            </td>
+                            <td style="font-size:8px; color:#88ddff;">
                                 {% if udata.expiry_utc %}
                                     {{ udata.expiry_utc[:10] }}
                                 {% else %}
                                     never
                                 {% endif %}
-                            </td>
-                            <td style="font-size:8px; color:#88ddff;">
-                                {{ udata.sessions|length if udata.sessions else 0 }}
                             </td>
                             <td>
                                 <div class="actions-cell">
@@ -3070,7 +3107,7 @@ def user_login_page():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
-        device_id = request.form.get('device_id', request.remote_addr)
+        device_id = request.remote_addr + request.headers.get('User-Agent', '')[:50]
 
         if verify_user(username, password):
             role = get_user_role(username)
@@ -3133,10 +3170,17 @@ def user_dashboard():
     if user_remaining is not None and user_remaining < remaining:
         remaining = user_remaining
     brand = get_brand_for_user(username)
+    
+    # Get device info
+    sessions = get_user_sessions(username)
+    device_limit = get_user_device_limit(username)
+    
     return render_template_string(USER_PANEL_HTML,
                                  remaining_seconds=remaining,
                                  max_seconds=3600,
-                                 brand=brand)
+                                 brand=brand,
+                                 active_devices=len(sessions),
+                                 device_limit=device_limit)
 
 # ============================================
 # FLASK ROUTES - RESELLER
@@ -3200,7 +3244,6 @@ def reseller_dashboard():
     
     # Get limits
     user_limit = resellers.get(username, {}).get("user_limit", 10)
-    device_limit = resellers.get(username, {}).get("device_limit", 1)
 
     total = len(my_users)
     active = 0
@@ -3229,7 +3272,6 @@ def reseller_dashboard():
         "inactive_users": inactive,
         "online_users": online,
         "user_limit": user_limit,
-        "device_limit": device_limit,
         "user_limit_reached": total >= user_limit
     }
 
@@ -3266,6 +3308,7 @@ def reseller_add_user():
     reseller_username = session.get("reseller_username")
     username = request.form.get('username', '').strip()
     password = request.form.get('password', '')
+    device_limit = request.form.get('device_limit', 1)
     expiry_str = request.form.get('expiry', '')
 
     if not username or not password:
@@ -3292,7 +3335,8 @@ def reseller_add_user():
         "created": datetime.datetime.utcnow().isoformat(),
         "created_by": reseller_username,
         "reseller_id": reseller_username,
-        "sessions": []
+        "sessions": [],
+        "device_limit": int(device_limit)
     }
 
     if expiry_str:
@@ -3307,7 +3351,7 @@ def reseller_add_user():
         if reseller_username in resellers:
             resellers[reseller_username]["user_count"] = len([u for u, d in users.items() if d.get("reseller_id") == reseller_username and d.get("active")])
             save_resellers(resellers)
-        flash(f"User '{username}' created", "success")
+        flash(f"User '{username}' created with {device_limit} device limit", "success")
     else:
         flash("Error creating user", "error")
 
@@ -3382,10 +3426,12 @@ def reseller_edit_user(username):
 
     if request.method == 'POST':
         new_password = request.form.get('password', '').strip()
+        device_limit = request.form.get('device_limit', 1)
         expiry_str = request.form.get('expiry', '')
 
         if new_password:
             users[username]["password"] = hashlib.sha256(new_password.encode()).hexdigest()
+        users[username]["device_limit"] = int(device_limit)
         if expiry_str:
             try:
                 dt = datetime.datetime.fromisoformat(expiry_str)
@@ -3409,6 +3455,8 @@ def reseller_edit_user(username):
             expiry_local = dt.strftime('%Y-%m-%dT%H:%M')
         except:
             pass
+    
+    device_limit = users[username].get("device_limit", 1)
 
     return f'''
     <!DOCTYPE html>
@@ -3416,7 +3464,7 @@ def reseller_edit_user(username):
     <style>
         *{{margin:0;padding:0;box-sizing:border-box;}}
         body{{background:#06060a;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:'Inter',sans-serif;}}
-        .box{{background:rgba(6,6,12,0.95);border:1px solid rgba(255,215,0,0.1);border-radius:20px;padding:30px;max-width:380px;width:92%;}}
+        .box{{background:rgba(6,6,12,0.95);border:1px solid rgba(255,215,0,0.1);border-radius:20px;padding:30px;max-width:400px;width:92%;}}
         h1{{font-family:'Orbitron',monospace;font-size:18px;font-weight:700;color:#fff;letter-spacing:2px;text-align:center;}}
         h1 .hl{{color:#ffd700;}}
         .sub{{text-align:center;font-size:8px;font-family:'Orbitron',monospace;color:#88ddff;letter-spacing:3px;margin-bottom:16px;}}
@@ -3428,6 +3476,7 @@ def reseller_edit_user(username):
         .btn:hover{{border-color:rgba(255,215,0,0.2);color:#ffd700;}}
         .back{{display:block;text-align:center;font-size:8px;font-family:'Orbitron',monospace;color:#88ddff;text-decoration:none;margin-top:10px;letter-spacing:2px;transition:all 0.3s ease;}}
         .back:hover{{color:#ffd700;}}
+        .limit-input{{padding:6px 12px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,215,0,0.05);border-radius:8px;color:#fff;font-size:13px;outline:none;font-family:'Inter',sans-serif;margin-top:2px;width:100%;}}
     </style>
     </head>
     <body>
@@ -3438,6 +3487,10 @@ def reseller_edit_user(username):
             <div class="form-group">
                 <label><i class="fas fa-key"></i> new password (optional)</label>
                 <input type="password" name="password" placeholder="leave blank to keep">
+            </div>
+            <div class="form-group">
+                <label><i class="fas fa-mobile-alt"></i> device limit</label>
+                <input type="number" name="device_limit" value="{device_limit}" class="limit-input" min="1" max="10">
             </div>
             <div class="form-group">
                 <label><i class="fas fa-clock"></i> expiry (UTC)</label>
@@ -3587,7 +3640,8 @@ def admin_add_reseller():
         "active": True,
         "created": datetime.datetime.utcnow().isoformat(),
         "created_by": "main_admin",
-        "sessions": []
+        "sessions": [],
+        "device_limit": int(device_limit)
     }
 
     if expiry_str:
@@ -3675,6 +3729,9 @@ def admin_edit_reseller(username):
             resellers[username]["user_limit"] = int(user_limit)
         if device_limit:
             resellers[username]["device_limit"] = int(device_limit)
+            if username in users:
+                users[username]["device_limit"] = int(device_limit)
+                save_users(users)
         if expiry_str:
             try:
                 dt = datetime.datetime.fromisoformat(expiry_str)
@@ -3767,6 +3824,7 @@ def admin_add_user():
     username = request.form.get('username', '').strip()
     password = request.form.get('password', '')
     reseller_id = request.form.get('reseller_id', '').strip()
+    device_limit = request.form.get('device_limit', 1)
     expiry_str = request.form.get('expiry', '')
 
     if not username or not password:
@@ -3784,7 +3842,8 @@ def admin_add_user():
         "active": True,
         "created": datetime.datetime.utcnow().isoformat(),
         "created_by": "main_admin",
-        "sessions": []
+        "sessions": [],
+        "device_limit": int(device_limit)
     }
 
     if reseller_id:
@@ -3813,7 +3872,7 @@ def admin_add_user():
             if reseller_id in resellers:
                 resellers[reseller_id]["user_count"] = len([u for u, d in users.items() if d.get("reseller_id") == reseller_id and d.get("active")])
                 save_resellers(resellers)
-        flash(f"User '{username}' created", "success")
+        flash(f"User '{username}' created with {device_limit} device limit", "success")
     else:
         flash("Error creating user", "error")
 
@@ -3874,12 +3933,14 @@ def admin_edit_user(username):
     if request.method == 'POST':
         new_password = request.form.get('password', '').strip()
         role = request.form.get('role', 'user')
+        device_limit = request.form.get('device_limit', 1)
         expiry_str = request.form.get('expiry', '')
         reseller_id = request.form.get('reseller_id', '').strip()
 
         if new_password:
             users[username]["password"] = hashlib.sha256(new_password.encode()).hexdigest()
         users[username]["role"] = role
+        users[username]["device_limit"] = int(device_limit)
         if expiry_str:
             try:
                 dt = datetime.datetime.fromisoformat(expiry_str)
@@ -3911,6 +3972,7 @@ def admin_edit_user(username):
         except:
             pass
 
+    device_limit = users[username].get("device_limit", 1)
     resellers = get_resellers()
     reseller_options = ""
     for r in resellers:
@@ -3936,6 +3998,7 @@ def admin_edit_user(username):
         .btn:hover{{border-color:rgba(0,255,255,0.2);color:#00ffff;}}
         .back{{display:block;text-align:center;font-size:8px;font-family:'Orbitron',monospace;color:#88ddff;text-decoration:none;margin-top:10px;letter-spacing:2px;transition:all 0.3s ease;}}
         .back:hover{{color:#00ffff;}}
+        .limit-input{{padding:6px 12px;background:rgba(0,0,0,0.2);border:1px solid rgba(0,255,255,0.05);border-radius:8px;color:#fff;font-size:13px;outline:none;font-family:'Inter',sans-serif;margin-top:2px;width:100%;}}
     </style>
     </head>
     <body>
@@ -3961,6 +4024,10 @@ def admin_edit_user(username):
                     <option value="">none (direct)</option>
                     {reseller_options}
                 </select>
+            </div>
+            <div class="form-group">
+                <label><i class="fas fa-mobile-alt"></i> device limit</label>
+                <input type="number" name="device_limit" value="{device_limit}" class="limit-input" min="1" max="10">
             </div>
             <div class="form-group">
                 <label><i class="fas fa-clock"></i> expiry (UTC)</label>
@@ -4061,8 +4128,8 @@ if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5000))
     print("="*60)
-    print("⚡ SAKIL BHAI - MULTI-PANEL SYSTEM v13.0")
-    print("🔥 USER LIMIT + DEVICE LIMIT CONTROL")
+    print("⚡ SAKIL BHAI - MULTI-PANEL SYSTEM v14.0")
+    print("🔥 PER-USER DEVICE LIMIT CONTROL")
     print("📍 PERFECT LOCATION TRACKING - RED BORDER")
     print("✅ RESELLER BRAND CUSTOMIZATION")
     print("="*60)
@@ -4078,11 +4145,12 @@ if __name__ == '__main__':
     print("="*60)
     print("💡 New Features:")
     print("   - Separate login URLs (no panel links)")
-    print("   - Reseller user limit control")
-    print("   - Device limit per user")
-    print("   - Active session tracking")
+    print("   - Per-user device limit (set during creation)")
+    print("   - Active session tracking per user")
     print("   - Clear sessions option")
     print("   - Brand customization per reseller")
+    print("   - User limit for resellers")
+    print("   - Expiry management")
     print("="*60)
 
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
