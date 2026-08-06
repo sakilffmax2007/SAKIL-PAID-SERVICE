@@ -3,10 +3,10 @@
 
 """
 ============================================
-SAKIL BHAI - MULTI-PANEL SYSTEM v10.0
+SAKIL BHAI - MULTI-PANEL SYSTEM v11.0
 🔥 SEPARATE PANELS · SEPARATE LOGINS
 📍 PERFECT LOCATION TRACKING - RED BORDER
-✅ READY FOR VERCEL + ANY HOSTING
+✅ FIREBASE ADMIN SDK · NO DEPENDENCY CONFLICT
 ============================================
 """
 
@@ -29,7 +29,7 @@ app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
 
 # ============================================
-# FIREBASE CONFIG
+# FIREBASE ADMIN SDK (No pyrebase conflicts)
 # ============================================
 FIREBASE_CONFIG = {
     "apiKey": "AIzaSyC74129by4J9ghwX7kCq_xamWVuaBkZvac",
@@ -44,22 +44,49 @@ FIREBASE_CONFIG = {
 FIREBASE_AVAILABLE = False
 db = None
 
+# Try Firebase Admin SDK first (no pyrebase)
 try:
-    import pyrebase
-    firebase = pyrebase.initialize_app(FIREBASE_CONFIG)
-    db = firebase.database()
+    import firebase_admin
+    from firebase_admin import credentials, db as firebase_db
+    
+    # Check if already initialized
+    if not firebase_admin._apps:
+        cred = credentials.Certificate({
+            "type": "service_account",
+            "project_id": "sakil-paid-hack-sell-1342007",
+            "private_key_id": "dummy",
+            "private_key": os.environ.get("FIREBASE_PRIVATE_KEY", "").replace("\\n", "\n"),
+            "client_email": "firebase-adminsdk-dummy@sakil-paid-hack-sell-1342007.iam.gserviceaccount.com",
+            "client_id": "dummy",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token"
+        })
+        firebase_admin.initialize_app(cred, {
+            'databaseURL': FIREBASE_CONFIG['databaseURL']
+        })
+    
+    db = firebase_db
+    FIREBASE_AVAILABLE = True
+    print("✅ Firebase Admin SDK Connected")
+except Exception as e:
+    print(f"⚠️ Firebase Admin SDK error: {e}")
+    
+    # Fallback: Try pyrebase (if available)
     try:
-        db.child("test").shallow().get()
-        FIREBASE_AVAILABLE = True
-        print("✅ Firebase Connected")
+        import pyrebase
+        firebase = pyrebase.initialize_app(FIREBASE_CONFIG)
+        db = firebase.database()
+        try:
+            db.child("test").shallow().get()
+            FIREBASE_AVAILABLE = True
+            print("✅ Firebase (pyrebase) Connected")
+        except:
+            FIREBASE_AVAILABLE = False
+            db = None
     except:
-        print("⚠️ Firebase connection timeout - using local fallback")
+        print("⚠️ Firebase unavailable - using local fallback")
         FIREBASE_AVAILABLE = False
         db = None
-except Exception as e:
-    print(f"⚠️ Firebase error: {e} - using local fallback")
-    FIREBASE_AVAILABLE = False
-    db = None
 
 USER_DATA_FILE = "user_firebase_fallback.json"
 
@@ -81,12 +108,17 @@ def save_local_data(data):
         return False
 
 def fb_get(path):
-    if FIREBASE_AVAILABLE:
+    if FIREBASE_AVAILABLE and db:
         try:
-            data = db.child(path).get()
-            if data.val():
-                return data.val()
-            return {}
+            if hasattr(db, 'reference'):
+                ref = db.reference(path)
+                data = ref.get()
+                return data if data else {}
+            elif hasattr(db, 'child'):
+                data = db.child(path).get()
+                if data and data.val():
+                    return data.val()
+                return {}
         except:
             local = load_local_data()
             return local.get(path, {})
@@ -95,10 +127,15 @@ def fb_get(path):
         return local.get(path, {})
 
 def fb_set(path, data):
-    if FIREBASE_AVAILABLE:
+    if FIREBASE_AVAILABLE and db:
         try:
-            db.child(path).set(data)
-            return True
+            if hasattr(db, 'reference'):
+                ref = db.reference(path)
+                ref.set(data)
+                return True
+            elif hasattr(db, 'child'):
+                db.child(path).set(data)
+                return True
         except:
             local = load_local_data()
             local[path] = data
@@ -636,7 +673,7 @@ USER_LOGIN_HTML = '''
 '''
 
 # ============================================
-# USER PANEL HTML
+# USER PANEL
 # ============================================
 USER_PANEL_HTML = '''
 <!DOCTYPE html>
@@ -1953,7 +1990,7 @@ RESELLER_LOGIN_HTML = '''
 '''
 
 # ============================================
-# RESELLER PANEL HTML
+# RESELLER PANEL
 # ============================================
 RESELLER_PANEL_HTML = '''
 <!DOCTYPE html>
@@ -2595,7 +2632,7 @@ ADMIN_LOGIN_HTML = '''
 '''
 
 # ============================================
-# ADMIN PANEL HTML
+# ADMIN PANEL
 # ============================================
 ADMIN_PANEL_HTML = '''
 <!DOCTYPE html>
@@ -3873,7 +3910,7 @@ def api_expiry_status():
     })
 
 # ============================================
-# REDIRECTS & MAIN
+# REDIRECTS
 # ============================================
 
 @app.route('/')
@@ -3896,10 +3933,10 @@ if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5000))
     print("="*60)
-    print("⚡ SAKIL BHAI - MULTI-PANEL SYSTEM v10.0")
+    print("⚡ SAKIL BHAI - MULTI-PANEL SYSTEM v11.0")
     print("🔥 SEPARATE PANELS · SEPARATE LOGINS")
     print("📍 PERFECT LOCATION TRACKING - RED BORDER")
-    print("✅ READY FOR VERCEL + ANY HOSTING")
+    print("✅ FIREBASE ADMIN SDK · NO DEPENDENCY CONFLICT")
     print("="*60)
     print(f"✅ User Login:     http://0.0.0.0:{port}/user-login")
     print(f"✅ User Panel:     http://0.0.0.0:{port}/user-dashboard")
