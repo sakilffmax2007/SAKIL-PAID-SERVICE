@@ -21,6 +21,7 @@ import requests
 import urllib.parse
 from functools import wraps
 import time
+from sakil import app
 
 # ============================================
 # FLASK APP INITIALIZATION
