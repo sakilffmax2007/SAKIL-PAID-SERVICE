@@ -3,10 +3,10 @@
 
 """
 ============================================
-SAKIL BHAI - MULTI-PANEL SYSTEM v15.3
-🔥 FULLY FUNCTIONAL · NO ERRORS · 100% ORIGINAL CODE
-📍 FIXED: admin_dashboard route · utcnow() deprecation
-✅ CRASH-PROOF · THREADED · ORIGINAL LENGTH
+SAKIL BHAI - MULTI-PANEL SYSTEM v15.1
+🔥 FULLY FUNCTIONAL · NO ERRORS
+📍 PER-USER DEVICE LIMIT · TABS UI
+✅ RESELLER USER LIMIT · BRAND CONTROL
 ============================================
 """
 
@@ -21,18 +21,6 @@ import requests
 import urllib.parse
 from functools import wraps
 import time
-import traceback
-import logging
-
-# ============================================
-# LOGGING SETUP
-# ============================================
-logging.basicConfig(
-    level=logging.INFO,
-    format='[%(asctime)s] %(levelname)s: %(message)s',
-    datefmt='%H:%M:%S'
-)
-logger = logging.getLogger(__name__)
 
 # ============================================
 # FLASK APP INITIALIZATION
@@ -41,7 +29,7 @@ app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
 
 # ============================================
-# FIREBASE CONFIG (ORIGINAL - UNCHANGED)
+# FIREBASE CONFIG
 # ============================================
 FIREBASE_CONFIG = {
     "apiKey": "AIzaSyC74129by4J9ghwX7kCq_xamWVuaBkZvac",
@@ -77,9 +65,9 @@ try:
     
     db = firebase_db
     FIREBASE_AVAILABLE = True
-    logger.info("✅ Firebase Admin SDK Connected")
+    print("✅ Firebase Admin SDK Connected")
 except Exception as e:
-    logger.warning(f"⚠️ Firebase error: {e} - using local fallback")
+    print(f"⚠️ Firebase error: {e} - using local fallback")
     FIREBASE_AVAILABLE = False
     db = None
 
@@ -144,7 +132,7 @@ def get_users():
                 "password": hashlib.sha256("sakil2026".encode()).hexdigest(),
                 "role": "main_admin",
                 "active": True,
-                "created": datetime.datetime.now(datetime.UTC).isoformat(),
+                "created": datetime.datetime.utcnow().isoformat(),
                 "created_by": "system",
                 "sessions": [],
                 "device_limit": 5
@@ -193,7 +181,7 @@ def get_user_expiry(username):
             if '+' in expiry_str:
                 expiry_str = expiry_str.split('+')[0]
         expiry = datetime.datetime.fromisoformat(expiry_str)
-        now = datetime.datetime.now(datetime.UTC)
+        now = datetime.datetime.utcnow()
         diff = expiry - now
         return max(0, int(diff.total_seconds()))
     except:
@@ -216,7 +204,7 @@ def get_system_remaining():
             if '+' in expiry_str:
                 expiry_str = expiry_str.split('+')[0]
         expiry = datetime.datetime.fromisoformat(expiry_str)
-        now = datetime.datetime.now(datetime.UTC)
+        now = datetime.datetime.utcnow()
         diff = expiry - now
         return max(0, int(diff.total_seconds()))
     except:
@@ -318,7 +306,7 @@ def add_session(username, device_id, device_name=""):
     sessions.append({
         "device_id": device_id,
         "device_name": device_name[:100],
-        "login_time": datetime.datetime.now(datetime.UTC).isoformat()
+        "login_time": datetime.datetime.utcnow().isoformat()
     })
     
     users[username]["sessions"] = sessions
@@ -1376,7 +1364,7 @@ ADMIN_LOGIN_HTML = '''
 '''
 
 # ============================================
-# USER PANEL HTML (FULL - ORIGINAL)
+# USER PANEL HTML (FULL - SAME AS BEFORE)
 # ============================================
 USER_PANEL_HTML = '''
 <!DOCTYPE html>
@@ -2350,7 +2338,7 @@ USER_PANEL_HTML = '''
 '''
 
 # ============================================
-# RESELLER PANEL HTML (Tabs UI) - ORIGINAL
+# RESELLER PANEL HTML (Tabs UI)
 # ============================================
 RESELLER_PANEL_HTML = '''
 <!DOCTYPE html>
@@ -2724,7 +2712,7 @@ RESELLER_PANEL_HTML = '''
 '''
 
 # ============================================
-# ADMIN PANEL HTML (Tabs UI) - ORIGINAL
+# ADMIN PANEL HTML (Tabs UI)
 # ============================================
 ADMIN_PANEL_HTML = '''
 <!DOCTYPE html>
@@ -3176,58 +3164,53 @@ ADMIN_PANEL_HTML = '''
 '''
 
 # ============================================
-# FLASK ROUTES - USER (with error handling)
+# FLASK ROUTES - USER
 # ============================================
 
 @app.route('/user-login', methods=['GET', 'POST'])
 def user_login_page():
-    try:
-        if request.method == 'POST':
-            username = request.form.get('username', '').strip()
-            password = request.form.get('password', '')
-            device_id = request.remote_addr + request.headers.get('User-Agent', '')[:50]
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        device_id = request.remote_addr + request.headers.get('User-Agent', '')[:50]
 
-            if verify_user(username, password):
-                role = get_user_role(username)
-                if role not in ['user', 'reseller', 'main_admin']:
-                    flash("Invalid user type", "error")
-                    return redirect(url_for('user_login_page'))
-                
-                if is_system_expired():
-                    flash("System expired.", "error")
-                    return redirect(url_for('user_login_page'))
-                if is_user_expired(username):
-                    flash("Your subscription has expired.", "error")
-                    return redirect(url_for('user_login_page'))
-
-                can_login, msg = can_login(username, device_id)
-                if not can_login:
-                    flash(msg, "error")
-                    return redirect(url_for('user_login_page'))
-
-                session["user_auth"] = True
-                session["user_username"] = username
-                session["user_role"] = role
-                session["user_device_id"] = device_id
-
-                add_session(username, device_id, request.headers.get('User-Agent', 'Unknown'))
-
-                users = get_users()
-                users[username]["last_login"] = datetime.datetime.now(datetime.UTC).isoformat()
-                save_users(users)
-
-                return redirect(url_for('user_dashboard'))
-            else:
-                flash("Invalid credentials", "error")
+        if verify_user(username, password):
+            role = get_user_role(username)
+            if role not in ['user', 'reseller', 'main_admin']:
+                flash("Invalid user type", "error")
+                return redirect(url_for('user_login_page'))
+            
+            if is_system_expired():
+                flash("System expired.", "error")
+                return redirect(url_for('user_login_page'))
+            if is_user_expired(username):
+                flash("Your subscription has expired.", "error")
                 return redirect(url_for('user_login_page'))
 
-        remaining_seconds = get_system_remaining()
-        remaining_minutes = max(0, remaining_seconds // 60)
-        return render_template_string(USER_LOGIN_HTML, error="", remaining_minutes=remaining_minutes)
-    except Exception as e:
-        logger.error(f"User login error: {traceback.format_exc()}")
-        flash("Server error, please try again", "error")
-        return redirect(url_for('user_login_page'))
+            can_login, msg = can_login(username, device_id)
+            if not can_login:
+                flash(msg, "error")
+                return redirect(url_for('user_login_page'))
+
+            session["user_auth"] = True
+            session["user_username"] = username
+            session["user_role"] = role
+            session["user_device_id"] = device_id
+
+            add_session(username, device_id, request.headers.get('User-Agent', 'Unknown'))
+
+            users = get_users()
+            users[username]["last_login"] = datetime.datetime.utcnow().isoformat()
+            save_users(users)
+
+            return redirect(url_for('user_dashboard'))
+        else:
+            flash("Invalid credentials", "error")
+            return redirect(url_for('user_login_page'))
+
+    remaining_seconds = get_system_remaining()
+    remaining_minutes = max(0, remaining_seconds // 60)
+    return render_template_string(USER_LOGIN_HTML, error="", remaining_minutes=remaining_minutes)
 
 @app.route('/user-logout')
 def user_logout():
@@ -3262,49 +3245,44 @@ def user_dashboard():
                                  device_limit=device_limit)
 
 # ============================================
-# FLASK ROUTES - RESELLER (with error handling)
+# FLASK ROUTES - RESELLER
 # ============================================
 
 @app.route('/reseller-login', methods=['GET', 'POST'])
 def reseller_login_page():
-    try:
-        if request.method == 'POST':
-            username = request.form.get('username', '').strip()
-            password = request.form.get('password', '')
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
 
-            if verify_user(username, password):
-                role = get_user_role(username)
-                if role not in ['reseller', 'main_admin']:
-                    flash("Reseller access required", "error")
-                    return redirect(url_for('reseller_login_page'))
-                
-                if is_system_expired():
-                    flash("System expired.", "error")
-                    return redirect(url_for('reseller_login_page'))
-                if is_user_expired(username):
-                    flash("Your reseller subscription has expired.", "error")
-                    return redirect(url_for('reseller_login_page'))
-
-                session["reseller_auth"] = True
-                session["reseller_username"] = username
-                session["reseller_role"] = role
-
-                users = get_users()
-                users[username]["last_login"] = datetime.datetime.now(datetime.UTC).isoformat()
-                save_users(users)
-
-                return redirect(url_for('reseller_dashboard'))
-            else:
-                flash("Invalid credentials", "error")
+        if verify_user(username, password):
+            role = get_user_role(username)
+            if role not in ['reseller', 'main_admin']:
+                flash("Reseller access required", "error")
+                return redirect(url_for('reseller_login_page'))
+            
+            if is_system_expired():
+                flash("System expired.", "error")
+                return redirect(url_for('reseller_login_page'))
+            if is_user_expired(username):
+                flash("Your reseller subscription has expired.", "error")
                 return redirect(url_for('reseller_login_page'))
 
-        remaining_seconds = get_system_remaining()
-        remaining_minutes = max(0, remaining_seconds // 60)
-        return render_template_string(RESELLER_LOGIN_HTML, error="", remaining_minutes=remaining_minutes)
-    except Exception as e:
-        logger.error(f"Reseller login error: {traceback.format_exc()}")
-        flash("Server error", "error")
-        return redirect(url_for('reseller_login_page'))
+            session["reseller_auth"] = True
+            session["reseller_username"] = username
+            session["reseller_role"] = role
+
+            users = get_users()
+            users[username]["last_login"] = datetime.datetime.utcnow().isoformat()
+            save_users(users)
+
+            return redirect(url_for('reseller_dashboard'))
+        else:
+            flash("Invalid credentials", "error")
+            return redirect(url_for('reseller_login_page'))
+
+    remaining_seconds = get_system_remaining()
+    remaining_minutes = max(0, remaining_seconds // 60)
+    return render_template_string(RESELLER_LOGIN_HTML, error="", remaining_minutes=remaining_minutes)
 
 @app.route('/reseller-logout')
 def reseller_logout():
@@ -3339,7 +3317,7 @@ def reseller_dashboard():
                 active += 1
     inactive = total - active
     online = 0
-    now = datetime.datetime.now(datetime.UTC)
+    now = datetime.datetime.utcnow()
     for udata in my_users.values():
         if udata.get("last_login"):
             try:
@@ -3414,7 +3392,7 @@ def reseller_add_user():
         "password": hashlib.sha256(password.encode()).hexdigest(),
         "role": "user",
         "active": True,
-        "created": datetime.datetime.now(datetime.UTC).isoformat(),
+        "created": datetime.datetime.utcnow().isoformat(),
         "created_by": reseller_username,
         "reseller_id": reseller_username,
         "sessions": [],
@@ -3588,45 +3566,46 @@ def reseller_edit_user(username):
     '''
 
 # ============================================
-# FLASK ROUTES - ADMIN (with error handling)
+# FLASK ROUTES - ADMIN
 # ============================================
 
 @app.route('/admin-login', methods=['GET', 'POST'])
 def admin_login_page():
-    try:
-        if request.method == 'POST':
-            username = request.form.get('username', '').strip()
-            password = request.form.get('password', '')
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
 
-            if verify_user(username, password):
-                role = get_user_role(username)
-                if role != "main_admin":
-                    flash("Main admin access required", "error")
-                    return redirect(url_for('admin_login_page'))
-                
-                if is_system_expired():
-                    flash("System expired.", "error")
-                    return redirect(url_for('admin_login_page'))
-
-                session["admin_auth"] = True
-                session["admin_username"] = username
-
-                users = get_users()
-                users[username]["last_login"] = datetime.datetime.now(datetime.UTC).isoformat()
-                save_users(users)
-
-                return redirect(url_for('admin_dashboard'))
-            else:
-                flash("Invalid credentials", "error")
+        if verify_user(username, password):
+            role = get_user_role(username)
+            if role != "main_admin":
+                flash("Main admin access required", "error")
+                return redirect(url_for('admin_login_page'))
+            
+            if is_system_expired():
+                flash("System expired.", "error")
                 return redirect(url_for('admin_login_page'))
 
-        remaining_seconds = get_system_remaining()
-        remaining_minutes = max(0, remaining_seconds // 60)
-        return render_template_string(ADMIN_LOGIN_HTML, error="", remaining_minutes=remaining_minutes)
-    except Exception as e:
-        logger.error(f"Admin login error: {traceback.format_exc()}")
-        flash("Server error", "error")
-        return redirect(url_for('admin_login_page'))
+            session["admin_auth"] = True
+            session["admin_username"] = username
+
+            users = get_users()
+            users[username]["last_login"] = datetime.datetime.utcnow().isoformat()
+            save_users(users)
+
+            return redirect(url_for('admin_dashboard'))
+        else:
+            flash("Invalid credentials", "error")
+            return redirect(url_for('admin_login_page'))
+
+    remaining_seconds = get_system_remaining()
+    remaining_minutes = max(0, remaining_seconds // 60)
+    return render_template_string(ADMIN_LOGIN_HTML, error="", remaining_minutes=remaining_minutes)
+
+@app.route('/admin-logout')
+def admin_logout():
+    session.pop("admin_auth", None)
+    session.pop("admin_username", None)
+    return redirect(url_for('admin_login_page'))
 
 @app.route('/admin-dashboard')
 @admin_session_required
@@ -3649,9 +3628,9 @@ def admin_dashboard():
             dt = datetime.datetime.fromisoformat(expiry_utc.replace('Z', '+00:00'))
             expiry_local = dt.strftime('%Y-%m-%dT%H:%M')
         except:
-            expiry_local = datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M')
+            expiry_local = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M')
     else:
-        expiry_local = datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M')
+        expiry_local = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M')
 
     stats = {
         "total_users": total,
@@ -3719,7 +3698,7 @@ def admin_add_reseller():
         "password": hashlib.sha256(password.encode()).hexdigest(),
         "role": "reseller",
         "active": True,
-        "created": datetime.datetime.now(datetime.UTC).isoformat(),
+        "created": datetime.datetime.utcnow().isoformat(),
         "created_by": "main_admin",
         "sessions": [],
         "device_limit": int(device_limit)
@@ -3738,7 +3717,7 @@ def admin_add_reseller():
     resellers = get_resellers()
     resellers[username] = {
         "brand_name": brand_name,
-        "created": datetime.datetime.now(datetime.UTC).isoformat(),
+        "created": datetime.datetime.utcnow().isoformat(),
         "active": True,
         "user_count": 0,
         "user_limit": int(user_limit),
@@ -3921,7 +3900,7 @@ def admin_add_user():
         "password": hashlib.sha256(password.encode()).hexdigest(),
         "role": "user",
         "active": True,
-        "created": datetime.datetime.now(datetime.UTC).isoformat(),
+        "created": datetime.datetime.utcnow().isoformat(),
         "created_by": "main_admin",
         "sessions": [],
         "device_limit": int(device_limit)
@@ -4201,17 +4180,17 @@ def reseller_redirect():
     return redirect(url_for('reseller_login_page'))
 
 # ============================================
-# MAIN - VERCEL/TERMUX READY
+# MAIN - VERCEL READY
 # ============================================
 
 if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5000))
     print("="*60)
-    print("⚡ SAKIL BHAI - MULTI-PANEL SYSTEM v15.3")
-    print("🔥 FULLY FUNCTIONAL · NO ERRORS · 100% ORIGINAL")
-    print("📍 FIXED: admin_dashboard route · utcnow() deprecation")
-    print("✅ CRASH-PROOF · THREADED")
+    print("⚡ SAKIL BHAI - MULTI-PANEL SYSTEM v15.1")
+    print("🔥 FULLY FUNCTIONAL · NO ERRORS")
+    print("📍 PER-USER DEVICE LIMIT · TABS UI")
+    print("✅ RESELLER USER LIMIT · BRAND CONTROL")
     print("="*60)
     print(f"✅ User Login:     http://0.0.0.0:{port}/user-login")
     print(f"✅ User Panel:     http://0.0.0.0:{port}/user-dashboard")
@@ -4223,13 +4202,16 @@ if __name__ == '__main__':
     print("🔑 Default Main Admin: sakil2026 / sakil2026")
     print("📁 Firebase: sakil-paid-hack-sell-1342007")
     print("="*60)
-    print("💡 FIXES APPLIED:")
-    print("   - admin_dashboard route now properly defined")
-    print("   - utcnow() → now(datetime.UTC) everywhere")
-    print("   - All routes wrapped in try/except")
-    print("   - Firebase fallback with local JSON")
-    print("   - API timeout handling")
-    print("   - Threaded=True for concurrent requests")
+    print("💡 Features:")
+    print("   - Separate login URLs (no panel links)")
+    print("   - Per-user device limit (set during creation)")
+    print("   - Active session tracking per user")
+    print("   - Clear sessions option")
+    print("   - Brand customization per reseller")
+    print("   - User limit for resellers")
+    print("   - Tabs UI for Admin & Reseller")
+    print("   - Expiry management")
+    print("   - Fixed API endpoint (exploitsindia.site)")
     print("="*60)
 
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
