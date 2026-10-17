@@ -14,7 +14,7 @@ import os
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
 
-# HTML template variable (Apnar complete admin HTML file ekhane rakha holo)
+# Fixed Admin HTML with Corrected Picker and UI Logic
 ADMIN_HTML = '''<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
@@ -286,7 +286,7 @@ document.querySelectorAll('.tab').forEach(function(t){t.onclick=function(){docum
 var VAL_OPTS=[['1','1','Day'],['7','7','Days'],['15','15','Days'],['30','30','Days'],['90','90','Days'],['365','1','Year'],['life','∞','Lifetime']];
 var DEV_OPTS=[1,2,3,4,5,6,7,8,9,10].map(function(n){return[String(n),n,n>1?'Devices':'Device']}).concat([['9999','∞','Unlimited']]);
 function pick(id,opts,sel){return'<div class="pick" id="'+id+'">'+opts.map(function(o){return'<button type="button" class="pk'+(String(o[0])===String(sel)?' on':'')+'" data-v="'+o[0]+'"><b>'+o[1]+'</b><small>'+o[2]+'</small></button>'}).join('')+'</div>'}
-function gp(m,id){var b=m.querySelector('#'+id+' .pk.on');return b?b.dataset.v:''}
+function gp(scope,id){var b=scope.querySelector('#'+id+' .pk.on');return b?b.dataset.v:''}
 document.addEventListener('click',function(e){var b=e.target.closest('.pk');if(!b)return;b.parentNode.querySelectorAll('.pk').forEach(function(x){x.classList.toggle('on',x===b)})});
 
 /* ===== MODALS ===== */
@@ -457,22 +457,15 @@ function sorter(x,y){var m=SORTS[sortI][0];
 $('sortb').onclick=function(){sortI=(sortI+1)%SORTS.length;this.textContent=SORTS[sortI][1];render()};
 </script></body></html>'''
 
-# ============================================
-# FLASK ROUTES
-# ============================================
-
 @app.route('/')
 def admin_panel():
-    # Admin Panel dekhabe
     return render_template_string(ADMIN_HTML)
 
 @app.route('/connect', methods=['GET', 'POST'])
 def connect_panel():
-    # User panel er sathe connect ba handle korar jonno PHP style route
-    # Apni ekhane apnar user panel ba connection logic add korte paren
     return jsonify({
         "status": "success",
-        "message": "Successfully connected with SAKIL BHAI User Panel via /connect route!",
+        "message": "Connected successfully with User Panel via /connect route!",
         "timestamp": datetime.datetime.utcnow().isoformat()
     })
 
