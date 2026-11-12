@@ -1,0 +1,79 @@
+{
+    "channels": [
+        {
+            "name": "+wxZn-Pw9fWMyNGFl",
+            "url": "https://t.me/+wxZn-Pw9fWMyNGFl",
+            "chat_id": -1003551479210
+        },
+        {
+            "name": "ROYAL_CHEATS_vip",
+            "url": "https://t.me/ROYAL_CHEATS_vip",
+            "chat_id": -1003612236075
+        },
+        {
+            "name": "+DnICngGPdOdiZTll",
+            "url": "https://t.me/+DnICngGPdOdiZTll",
+            "chat_id": -1003572516384
+        },
+        {
+            "name": "ROYAL CHEATS OWNER",
+            "url": "https://t.me/SAKIL_BHAI_BOL",
+            "chat_id": -1002979275744
+        },
+        {
+            "name": "ONLY MODDER",
+            "url": "https://t.me/only_modder_ana",
+            "chat_id": -1003618788736
+        }
+    ],
+    "fake_channels": [
+        {
+            "name": "+OADIjEIQTHdhNGE1",
+            "url": "https://t.me/+OADIjEIQTHdhNGE1",
+            "chat_id": -1004353285572
+        }
+    ],
+    "subscribers": [
+        9161954126,
+        8914394626,
+        9177133713,
+        8809138785,
+        8706921659
+    ],
+    "welcome_message": {
+        "chat_id": 7215059470,
+        "message_id": 472
+    },
+    "final_messages": [],
+    "main_passed": [
+        8914394626,
+        8809138785
+    ],
+    "completed_users": [],
+    "extra_requests": {
+        "9161954126": [
+            "-1004353285572"
+        ],
+        "7092914412": [
+            "-1004353285572"
+        ],
+        "8914394626": [
+            "-1004353285572"
+        ],
+        "6599355612": [
+            "-1004353285572"
+        ],
+        "9177133713": [
+            "-1004353285572"
+        ],
+        "8809138785": [
+            "-1004353285572"
+        ],
+        "5399668822": [
+            "-1004353285572"
+        ],
+        "8706921659": [
+            "-1004353285572"
+        ]
+    }
+}
