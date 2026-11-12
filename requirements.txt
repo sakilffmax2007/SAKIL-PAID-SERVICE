@@ -1,2 +1,4 @@
-python-telegram-bot
-httpx
+pyTelegramBotAPI
+urllib3
+requests
+flask
