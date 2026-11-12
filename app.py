@@ -1,473 +1,988 @@
-# -*- coding: utf-8 -*-
-"""
-============================================
-SAKIL BHAI - PYTHON FLASK ADMIN & CONNECT PANEL
-============================================
-"""
-from flask import Flask, render_template_string, request, jsonify, redirect, url_for, session
-import datetime
-import hashlib
-import secrets
-import json
 import os
+import re
+import json
+import html
+import asyncio
+import logging
+import tempfile
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+)
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    CallbackQueryHandler,
+    MessageHandler,
+    ChatJoinRequestHandler,
+    ContextTypes,
+    filters,
+)
+from telegram.error import TelegramError, RetryAfter
+from telegram.request import HTTPXRequest
 
-app = Flask(__name__)
-app.secret_key = secrets.token_hex(32)
+# =========================================================
+# SETTINGS
+# =========================================================
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
+TOKEN = "9201939195:AAH2pSkoJf8QgdmLBCp7lFjCU4OVuLicgZM"
+ADMIN_ID = 7215059470
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(BASE_DIR, "bot_config.json")
+ADMIN_STATE = {}
+ADMIN_DASHBOARD_ID = None
+ADMIN_TRANSIENT_ID = None
 
-# Fixed Admin HTML with Corrected Picker and UI Logic
-ADMIN_HTML = '''<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>SAKIL BHAI – Admin Panel</title>
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-html,body{touch-action:manipulation}
-html,body{overflow-x:hidden;overflow-y:auto;min-height:100%;-webkit-overflow-scrolling:touch}
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-:root{--red:#00e5ff;--red2:#00a0b3;--rgb:0,229,255;--glow:rgba(var(--rgb),.55);--card:rgba(8,8,12,.8);--field:#0e0a10;--bd:rgba(var(--rgb),.45);--mut:rgba(255,255,255,.55);--ok:#22c55e;--warn:#f59e0b}
-body{font-family:Inter,sans-serif;color:#fff;min-height:100vh;background:radial-gradient(ellipse 70% 40% at 50% 0,rgba(var(--rgb),.25),transparent 65%),#0a0a0a;padding-bottom:40px}
-h1,h2,h3,.rj{font-family:Rajdhani,sans-serif;letter-spacing:.08em}
-.hide{display:none!important}
-button,input,select{font-family:inherit;font-size:15px;color:#fff;outline:none}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:18px;box-shadow:0 0 30px rgba(var(--rgb),.1)}
-input,select{width:100%;background:var(--field);border:1px solid var(--bd);border-radius:12px;padding:12px 14px}
-input:focus,select:focus{border-color:var(--red);box-shadow:0 0 0 3px rgba(var(--rgb),.18)}
-label{display:block;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:12px 0 6px}
-.btn{border:0;border-radius:12px;padding:11px 16px;cursor:pointer;font-weight:600;background:linear-gradient(135deg,var(--red2),var(--red));box-shadow:0 0 16px var(--glow)}
-.btn.g{background:rgba(255,255,255,.07);box-shadow:none;border:1px solid rgba(255,255,255,.15)}
-.btn.s{padding:7px 11px;font-size:.8rem;border-radius:9px}
-.btn.ok{background:#15803d;box-shadow:none}
-.btn:active{transform:scale(.97)}
-/* login */
-#login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-#login .card{width:100%;max-width:400px;padding:34px 28px}
-#login h1{text-align:center;font-size:2.2rem;text-shadow:0 0 18px var(--glow)}
-#login h1 span,.logo span{color:var(--red)}
-#login p.sub{text-align:center;color:var(--mut);font-size:.7rem;letter-spacing:.25em;margin:4px 0 14px}
-.err{color:#ff5475;font-size:.8rem;margin-top:10px;text-align:center;min-height:1em}
-/* top */
-.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:rgba(10,10,10,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--bd)}
-.logo{font-size:1.5rem;font-weight:700;text-shadow:0 0 14px var(--glow)}
-.wrap{max-width:980px;margin:0 auto;padding:16px}
-.tabs{display:flex;gap:8px;margin-bottom:16px;overflow-x:auto}
-.tab{flex:1;min-width:max-content;padding:11px 16px;border-radius:12px;border:1px solid var(--bd);background:transparent;cursor:pointer;font-weight:600;color:var(--mut)}
-.tab.on{background:var(--red);color:#fff;box-shadow:0 0 18px var(--glow);border-color:var(--red)}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px}
-.stat{padding:14px}.stat b{display:block;font-family:Rajdhani;font-size:1.9rem;line-height:1}.stat small{color:var(--mut);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase}
-.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.u{margin-bottom:10px;padding:14px}
-.u .h{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
-.u .n{font-weight:600;font-size:1.05rem;word-break:break-all}
-.meta{display:flex;gap:14px;flex-wrap:wrap;color:var(--mut);font-size:.8rem;margin:8px 0 12px}
-.meta b{color:#fff;font-weight:500}
-.badge{font-size:.65rem;padding:3px 9px;border-radius:20px;letter-spacing:.1em;font-weight:700}
-.b-a{background:rgba(34,197,94,.15);color:var(--ok)}.b-b{background:rgba(255,23,68,.2);color:#ff5475}.b-e{background:rgba(245,158,11,.15);color:var(--warn)}
-.acts{display:flex;gap:8px;flex-wrap:wrap}
-.sw{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06)}
-.tg{position:relative;width:50px;height:28px;flex-shrink:0}.tg input{opacity:0;width:100%;height:100%;position:absolute;z-index:1;cursor:pointer}
-.tg i{position:absolute;inset:0;background:#333;border-radius:20px;transition:.2s}.tg i::after{content:'';position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:.2s}
-.tg input:checked+i{background:var(--red);box-shadow:0 0 12px var(--glow)}.tg input:checked+i::after{transform:translateX(22px)}
-.modal{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;padding:16px}
-.modal .card{width:100%;max-width:440px;max-height:88vh;overflow:auto}
-.dev{padding:10px 0;border-bottom:1px solid rgba(255,255,255,.07);display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:.85rem}
-.dev small{color:var(--mut);display:block}
-#toasts{position:fixed;top:14px;right:14px;left:14px;z-index:99;display:flex;flex-direction:column;align-items:flex-end;gap:10px;pointer-events:none}
-.tt{--c:#22c55e;position:relative;overflow:hidden;display:flex;align-items:center;gap:12px;min-width:240px;max-width:100%;padding:12px 16px 14px;border-radius:14px;background:rgba(17,17,17,.96);border:1px solid var(--c);box-shadow:0 0 22px color-mix(in srgb,var(--c) 45%,transparent),0 8px 24px rgba(0,0,0,.5);animation:tin .35s cubic-bezier(.2,.9,.3,1.2)}
-.tt.error{--c:#ef4444}.tt.warn{--c:#f59e0b}.tt.info{--c:#3b82f6}
-.tt.out{opacity:0;transform:translateX(40px);transition:.3s}
-.ti{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;background:color-mix(in srgb,var(--c) 20%,transparent);color:var(--c);border:1px solid var(--c)}
-.tt b{font-family:Rajdhani;letter-spacing:.12em;font-size:.85rem;color:var(--c);display:block}.tt small{font-size:.82rem;color:#ddd}
-.tp{position:absolute;left:0;bottom:0;height:3px;background:var(--c);animation:tbar 2.8s linear forwards}
-@keyframes tin{from{opacity:0;transform:translateX(60px) scale(.9)}}@keyframes tbar{from{width:100%}to{width:0}}
-.chips{display:flex;gap:8px;overflow-x:auto;margin-bottom:12px}.chip{padding:7px 14px;border-radius:20px;border:1px solid var(--bd);background:transparent;color:var(--mut);cursor:pointer;font-size:.8rem;white-space:nowrap}.chip.on{background:rgba(var(--rgb),.2);color:#fff;border-color:var(--red)}
-.pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:8px}
-.pk{padding:10px 4px;border-radius:14px;border:1px solid var(--bd);background:var(--field);color:var(--mut);cursor:pointer;text-align:center;line-height:1.15;transition:.15s}
-.pk b{display:block;font-family:Rajdhani,sans-serif;font-size:1.35rem;color:#fff}.pk small{display:block;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase}
-.pk:active{transform:scale(.94)}
-.pk.on{background:linear-gradient(135deg,var(--red2),var(--red));color:#fff;border-color:var(--red);box-shadow:0 0 16px var(--glow)}
-#login{position:relative;overflow:hidden}
-#pc{position:absolute;inset:0;width:100%;height:100%;z-index:0}
-.orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:.3;animation:orb 9s ease-in-out infinite alternate;pointer-events:none}
-.o1{width:280px;height:280px;background:var(--red);top:-60px;left:-80px}.o2{width:240px;height:240px;background:var(--red2);bottom:-60px;right:-70px;animation-delay:-4s}
-@keyframes orb{to{transform:translate(40px,30px) scale(1.2)}}
-.lcard{position:relative;max-width:400px!important;padding:38px 26px 26px!important;z-index:1;border-radius:26px;background:linear-gradient(160deg,rgba(10,25,32,.88),rgba(12,12,12,.94));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 0 0 1px rgba(var(--rgb),.12),0 0 60px rgba(var(--rgb),.3),0 24px 60px rgba(0,0,0,.7)!important;animation:cin .55s cubic-bezier(.2,.9,.3,1.2)}
-@keyframes cin{from{opacity:0;transform:translateY(30px) scale(.92)}}
-.lcard.shake{animation:shake .45s}
-@keyframes shake{20%,60%{transform:translateX(-9px)}40%,80%{transform:translateX(9px)}}
-.lcrest{position:absolute;top:-42px;left:50%;transform:translateX(-50%);width:84px;height:84px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2.7rem;background:radial-gradient(circle,#0a252a,#020a0a);border:2px solid var(--red);box-shadow:0 0 30px var(--glow),inset 0 0 18px rgba(var(--rgb),.25);animation:crest 2.2s ease-in-out infinite}
-@keyframes crest{50%{box-shadow:0 0 46px var(--red),inset 0 0 18px rgba(var(--rgb),.4)}}
-.lcard .sub{margin-bottom:22px!important}
-.fld{position:relative;margin-bottom:14px}
-.fld input{padding:14px 14px 14px 46px;border-radius:14px}
-.li{position:absolute;left:15px;top:50%;transform:translateY(-50%);color:rgba(255,255,255,.4);transition:.2s;pointer-events:none}
-.fld:focus-within .li{color:var(--red)}
-.eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:42px;height:42px;border:0;background:transparent;color:rgba(255,255,255,.5);cursor:pointer;border-radius:50%;display:flex;align-items:center;justify-content:center}
-.eye:hover,.eye.on{color:var(--red)}
-.lbtn{width:100%;height:52px;margin-top:8px;border-radius:50px;font-family:Rajdhani,sans-serif;font-size:1.1rem;letter-spacing:.2em;display:flex;align-items:center;justify-content:center;gap:10px}
-.spin{width:18px;height:18px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
-@keyframes sp{to{transform:rotate(360deg)}}
-.foot{text-align:center;color:rgba(255,255,255,.3);font-size:.68rem;letter-spacing:.2em;text-transform:uppercase;margin-top:16px}
-.lk-t{font-family:Rajdhani,sans-serif;font-size:3.2rem;font-weight:700;letter-spacing:.12em;color:var(--red);text-shadow:0 0 6px var(--red),0 0 24px rgba(var(--rgb),.9);line-height:1;margin:10px 0 14px}
-.lk-bar{height:6px;border-radius:6px;background:rgba(255,255,255,.08);overflow:hidden}.lk-bar i{display:block;height:100%;width:100%;background:var(--red);box-shadow:0 0 12px var(--red);border-radius:6px;transition:width .3s linear}
-.fab{display:none}body.in .fab{display:flex;align-items:center;justify-content:center}
-.dl{font-style:normal;font-size:.68rem;padding:2px 8px;border-radius:20px;margin-left:6px;background:rgba(34,197,94,.15);color:var(--ok);font-weight:600}
-.dl.w{background:rgba(245,158,11,.18);color:var(--warn)}.dl.x{background:rgba(255,23,68,.18);color:#ff5475}
-.sk{height:104px;margin-bottom:10px;border-radius:16px;background:linear-gradient(100deg,rgba(var(--rgb),.05) 30%,rgba(var(--rgb),.2) 50%,rgba(var(--rgb),.05) 70%) 0 0/200% 100%;border:1px solid rgba(var(--rgb),.25);animation:sk 1.2s linear infinite}
-@keyframes sk{to{background-position:-200% 0}}
-textarea{width:100%;background:var(--field);border:1px solid var(--bd);border-radius:12px;padding:12px;color:#fff;height:160px;font-family:monospace;font-size:13px}
-.empty{text-align:center;color:var(--mut);padding:30px}
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
-/* ===== NEON CYAN THEME ===== */
-#pc{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
-#app,#login{position:relative;z-index:1}
-body{background:radial-gradient(ellipse 70% 40% at 50% 0,rgba(var(--rgb),.2),transparent 65%),linear-gradient(rgba(var(--rgb),.05) 1px,transparent 1px) 0 0/42px 42px,linear-gradient(90deg,rgba(var(--rgb),.05) 1px,transparent 1px) 0 0/42px 42px,#04040a}
-.card{background:var(--card);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--red);box-shadow:0 0 10px rgba(var(--rgb),.5),0 0 30px rgba(var(--rgb),.2),inset 0 0 18px rgba(var(--rgb),.08)}
-.modal .card{background:rgba(6,6,10,.97)}
-.logo,h1,h2,h3,.stat b{text-shadow:0 0 6px var(--red),0 0 20px rgba(var(--rgb),.8)}
-.stat b{color:var(--red)}
-.btn{background:rgba(var(--rgb),.16);border:1px solid var(--red);text-shadow:0 0 8px var(--red);box-shadow:0 0 12px rgba(var(--rgb),.55),inset 0 0 10px rgba(var(--rgb),.18);transition:.15s}
-.btn:hover{background:rgba(var(--rgb),.32);box-shadow:0 0 24px var(--red),inset 0 0 14px rgba(var(--rgb),.3)}
-.btn.g{background:rgba(255,255,255,.04);border-color:rgba(var(--rgb),.5);box-shadow:0 0 8px rgba(var(--rgb),.25);text-shadow:none}
-.btn.ok{background:rgba(34,197,94,.18);border-color:#22c55e;box-shadow:0 0 14px rgba(34,197,94,.55);text-shadow:0 0 8px #22c55e}
-input,select,textarea{border-color:rgba(var(--rgb),.5)}
-input:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0 1px var(--red),0 0 18px rgba(var(--rgb),.6)}
-.top{background:rgba(4,4,10,.82);border-bottom:1px solid var(--red);box-shadow:0 0 20px rgba(var(--rgb),.4);justify-content:flex-start;gap:12px}
-.tab{border-color:rgba(var(--rgb),.4)}
-.tab.on,.chip.on,.pk.on{background:rgba(var(--rgb),.22);color:#fff;border-color:var(--red);box-shadow:0 0 14px rgba(var(--rgb),.7),inset 0 0 10px rgba(var(--rgb),.25);text-shadow:0 0 8px var(--red)}
-.pk.on b{color:#fff}
-.chip{border-color:rgba(var(--rgb),.4)}
-.badge{box-shadow:0 0 10px currentColor}
-.u{transition:.2s}.u:hover{box-shadow:0 0 18px rgba(var(--rgb),.55),0 0 40px rgba(var(--rgb),.2),inset 0 0 18px rgba(var(--rgb),.1)}
-.burger{width:44px;height:44px;flex-shrink:0;border-radius:12px;border:1px solid var(--red);background:rgba(var(--rgb),.12);box-shadow:0 0 12px rgba(var(--rgb),.55);display:flex;flex-direction:column;gap:5px;align-items:center;justify-content:center;cursor:pointer}
-.burger i{width:22px;height:2.5px;border-radius:3px;background:var(--red);box-shadow:0 0 8px var(--red)}
-.dov{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.65);opacity:0;pointer-events:none;transition:.25s}.dov.on{opacity:1;pointer-events:auto}
-.drawer{position:fixed;top:0;left:0;bottom:0;width:290px;max-width:84vw;z-index:41;background:rgba(5,5,9,.97);border-right:1px solid var(--red);box-shadow:0 0 34px rgba(var(--rgb),.55);transform:translateX(-105%);transition:.3s cubic-bezier(.2,.8,.2,1);overflow-y:auto;padding:16px 14px calc(20px + env(safe-area-inset-bottom,0px))}
-.drawer.on{transform:none}
-.dh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
-.ds{font-size:.68rem;letter-spacing:.22em;color:var(--red);margin:18px 6px 8px;text-shadow:0 0 8px var(--red)}
-.di{display:flex;align-items:center;gap:12px;width:100%;padding:13px 14px;margin-bottom:8px;border-radius:14px;border:1px solid rgba(var(--rgb),.35);background:rgba(var(--rgb),.07);color:#fff;font-weight:500;cursor:pointer;text-align:left}
-.di:hover,.di:active{background:rgba(var(--rgb),.22);box-shadow:0 0 14px rgba(var(--rgb),.5)}
-.di span{width:26px;text-align:center;font-size:1.1rem}
-.fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:30;width:54px;height:54px;border-radius:50%;border:1px solid var(--red);background:rgba(8,8,12,.85);font-size:1.5rem;cursor:pointer;box-shadow:0 0 18px var(--red),inset 0 0 12px rgba(var(--rgb),.3);animation:fab 2.4s ease-in-out infinite}
-@keyframes fab{50%{box-shadow:0 0 32px var(--red),inset 0 0 16px rgba(var(--rgb),.5)}}
-.sc8{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:14px 0}
-.sc{aspect-ratio:1;border-radius:50%;border:2px solid transparent;cursor:pointer;box-shadow:0 0 14px var(--c),0 0 4px var(--c);transition:.15s}
-.sc.on{border-color:#fff;transform:scale(1.15)}
-</style></head><body>
-<canvas id="pc"></canvas>
+# =========================================================
+# ADMIN KEYBOARD
+# =========================================================
+ADMIN_KEYBOARD = ReplyKeyboardMarkup(
+    [
+        [KeyboardButton("📢 BROADCAST"),
+         KeyboardButton("➕ MAIN CHANNEL")],
+        [KeyboardButton("➕ EXTRA CHANNEL"),
+         KeyboardButton("🗂 MANAGE CHANNELS")],
+        [KeyboardButton("🖼 WELCOME"),
+         KeyboardButton("🎁 FINAL CONTENT")],
+        [KeyboardButton("📋 BOT STATUS"),
+         KeyboardButton("🏠 ADMIN HOME")],
+        [KeyboardButton("❌ CANCEL")],
+    ],
+    resize_keyboard=True,
+    is_persistent=True,
+    one_time_keyboard=False,
+    input_field_placeholder="Select an admin option..."
+)
 
-<div id="login"><i class="orb o1"></i><i class="orb o2"></i>
-<div class="card lcard" id="lcard">
-<h1 class="rj">SAKIL <span>BHAI</span></h1><p class="sub rj">ADMIN PANEL</p>
-<div class="fld"><svg class="li" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-<input id="lu" autocomplete="off" placeholder="Admin username"></div>
-<div class="fld"><svg class="li" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-<input id="lp" type="password" placeholder="Password" style="padding-right:50px">
-<button type="button" class="eye" id="eye" aria-label="Show password"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
-<button class="btn lbtn" id="lb"><span id="lbt">LOGIN</span><i class="spin hide" id="lsp"></i></button>
-<div class="err" id="le"></div>
-<p class="foot">SAKIL BHAI Authorized Only</p>
-</div></div>
+# =========================================================
+# CONFIG
+# =========================================================
+def default_config():
+    return {
+        "channels": [],
+        "fake_channels": [],
+        "subscribers": [],
+        "welcome_message": None,
+        "final_messages": [],
+        "main_passed": [],
+        "completed_users": [],
+        "extra_requests": {}
+    }
 
-<div id="app" class="hide">
-<div class="top"><button class="burger" id="burger" aria-label="Menu"><i></i><i></i><i></i></button><div class="logo rj">SAKIL <span>BHAI</span> • ADMIN</div></div>
-<div class="wrap">
-<div class="stats" id="stats"></div>
-<div class="tabs"><button class="tab on" data-t="users">Users</button><button class="tab" data-t="settings">Maintenance &amp; Update</button></div>
+def load_config():
+    config = default_config()
+    try:
+        if os.path.isfile(CONFIG_FILE):
+            with open(CONFIG_FILE, "r", encoding="utf-8") as file:
+                data = json.load(file)
+                if isinstance(data, dict):
+                    config.update(data)
+                old_final = data.get("final_message")
+                if (
+                    isinstance(old_final, dict)
+                    and not config.get("final_messages")
+                ):
+                    config["final_messages"] = [old_final]
+    except Exception:
+        logger.exception("Could not load config")
+    
+    for key in ("channels", "fake_channels"):
+        if not isinstance(config.get(key), list):
+            config[key] = []
+        config[key] = [
+            item for item in config[key]
+            if isinstance(item, dict)
+            and item.get("chat_id") is not None
+            and item.get("url")
+        ]
+    for key in (
+        "subscribers",
+        "final_messages",
+        "main_passed",
+        "completed_users"
+    ):
+        if not isinstance(config.get(key), list):
+            config[key] = []
+    if not isinstance(config.get("extra_requests"), dict):
+        config["extra_requests"] = {}
+    return config
 
-<div id="t-users">
-<div class="row" style="margin-bottom:12px"><input id="q" placeholder="🔍 Search user..." style="flex:1;min-width:150px"><button class="btn g" id="sortb" title="Sort">⇅ A-Z</button><button class="btn" id="add">+ Add User</button></div>
-<div class="chips" id="chips"></div>
-<div id="list"></div></div>
+def save_config(config):
+    temp_path = None
+    try:
+        folder = os.path.dirname(os.path.abspath(CONFIG_FILE))
+        fd, temp_path = tempfile.mkstemp(
+            dir=folder,
+            suffix=".tmp"
+        )
+        with os.fdopen(fd, "w", encoding="utf-8") as file:
+            json.dump(
+                config,
+                file,
+                indent=4,
+                ensure_ascii=False
+            )
+        os.replace(temp_path, CONFIG_FILE)
+        return True
+    except Exception:
+        logger.exception("Could not save config")
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+        return False
 
-<div id="t-settings" class="hide"><div class="card">
-<h3 class="rj" style="font-size:1.3rem">Maintenance Mode</h3>
-<div class="sw"><span>App maintenance ON (login band)</span><label class="tg" style="margin:0"><input type="checkbox" id="mOn"><i></i></label></div>
-<label>Maintenance message</label><input id="mMsg" placeholder="Server under maintenance, try later">
-<h3 class="rj" style="font-size:1.3rem;margin-top:22px">App Update</h3>
-<label>Latest version name</label><input id="uVer" placeholder="e.g. 1.2.0">
-<label>Update link</label><input id="uUrl" placeholder="https://...">
-<label>Update message</label><input id="uMsg" placeholder="New version available, please update">
-<div class="sw"><span>Force update (block old versions)</span><label class="tg" style="margin:0"><input type="checkbox" id="uForce"><i></i></label></div>
-<h3 class="rj" style="font-size:1.3rem;margin-top:22px">Attention Dialog</h3>
-<div class="sw"><span>Show dialog on user app launch</span><label class="tg" style="margin:0"><input type="checkbox" id="nOn"><i></i></label></div>
-<label>Message title</label><input id="nTitle" placeholder="e.g. IMPORTANT NOTICE">
-<label>Description</label><textarea id="nDesc" placeholder="Write full notice message here..." style="height:110px;font-family:Inter,sans-serif;font-size:14px"></textarea>
-<label>Dialog Buttons</label><div id="nBtn"></div>
-<button class="btn g" id="nPrev" style="width:100%;margin-top:14px">👁 Preview</button>
-<button class="btn" id="saveCfg" style="width:100%;margin-top:18px;height:46px">SAVE SETTINGS</button>
-</div></div>
-</div>
-</div>
-<div class="dov" id="dov"></div>
-<aside class="drawer" id="drawer">
-<div class="dh"><div class="logo rj">SAKIL <span>BHAI</span></div><button class="btn g s" id="dx">✕</button></div>
-<div class="ds">USER MANAGEMENT</div>
-<button class="di" id="add2"><span>➕</span>Add User</button>
-<button class="di" id="bulk"><span>⚡</span>Bulk Keys Generator</button>
-<button class="di" id="exp"><span>⬇</span>Export CSV</button>
-<button class="di" id="clean"><span>🧹</span>Delete Expired</button>
-<button class="di" id="srch"><span>🔍</span>Search User</button>
-<div class="ds">FILTER</div>
-<button class="di" data-df="all"><span>👥</span>All Users</button>
-<button class="di" data-df="active"><span>🟢</span>Active Users</button>
-<button class="di" data-df="banned"><span>⛔</span>Banned Users</button>
-<button class="di" data-df="expired"><span>⌛</span>Expired Users</button>
-<div class="ds">PANEL</div>
-<button class="di" id="goU"><span>📋</span>Users List</button>
-<button class="di" id="goS"><span>🛠</span>Maintenance &amp; Update</button>
-<button class="di" id="rf"><span>⟳</span>Refresh</button>
-<button class="di" id="pal"><span>🎨</span>Colour Pad</button>
-<button class="di" id="lo"><span>🚪</span>Logout</button>
-</aside>
-<button class="fab" id="fab" aria-label="Colour pad">🎨</button>
-<div id="toasts"></div>
+def get_all_channels(config):
+    return config["channels"] + config["fake_channels"]
 
-<script>
-/* ===== FIREBASE CONFIG & REST API ===== */
-var DB='https://sakil-paid-hack-sell-1342007-default-rtdb.firebaseio.com/';
-var ADMIN_USER='Sakil',ADMIN_PASS='1342007';
-function db(p,m,b){var o={method:m||'GET',cache:'no-store'};if(b!==undefined){o.headers={'Content-Type':'application/json'};o.body=JSON.stringify(b)}
- return fetch(DB+'/'+p+'.json',o).then(function(r){return r.json().catch(function(){return null}).then(function(j){if(!r.ok)throw new Error((j&&j.error)||r.status);return j})})}
-var $=function(i){return document.getElementById(i)};
-var users={},cfg={},flt='all';
-function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
-function toast(t,type){type=type||(/error|invalid|required|exists|fail/i.test(t)?'error':'success');var L={success:'SUCCESS',error:'ERROR',warn:'WARNING',info:'INFO'},I={success:'✓',error:'✕',warn:'!',info:'i'};
- var e=document.createElement('div');e.className='tt '+type;e.innerHTML='<span class="ti">'+I[type]+'</span><div><b>'+L[type]+'</b><small>'+esc(t)+'</small></div><i class="tp"></i>';
- $('toasts').appendChild(e);while($('toasts').children.length>4)$('toasts').firstChild.remove();setTimeout(function(){e.classList.add('out');setTimeout(function(){e.remove()},300)},2800)}
-function ask(msg,cb){var m=modal('<h3 class="rj" style="font-size:1.3rem">Confirm</h3><p style="margin:10px 0 20px;color:#ddd">'+esc(msg)+'</p><div class="row"><button class="btn g" style="flex:1" id="n">Cancel</button><button class="btn" style="flex:1" id="y">Yes, do it</button></div>');m.querySelector('#n').onclick=function(){m.remove()};m.querySelector('#y').onclick=function(){m.remove();cb()}}
-function copyTxt(t){if(navigator.clipboard&&navigator.clipboard.writeText)return navigator.clipboard.writeText(t);var a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');a.remove();return Promise.resolve()}
-function pad(n){return(n<10?'0':'')+n}
-function fmt(d){return pad(d.getDate())+'-'+pad(d.getMonth()+1)+'-'+d.getFullYear()+' '+pad(d.getHours())+':'+pad(d.getMinutes())}
-function parseV(v){if(!v)return null;v=String(v).trim();if(v.toLowerCase()==='lifetime')return new Date(2099,11,31,23,59);
- var m=/^(\d{1,2})-(\d{1,2})-(\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/.exec(v);return m?new Date(+m[3],+m[2]-1,+m[1],+(m[4]||0),+(m[5]||0)):null}
-function expired(v){var d=parseV(v);return !d||d<Date.now()}
-function state(u){return u.status==='banned'?'banned':expired(u.validity)?'expired':'active'}
-function maxOf(u){return u.maxDevices!=null?+u.maxDevices:(String(u.access)==='∞'?9999:1)}
-function devsOf(u){var d=(u.devices&&typeof u.devices==='object')?Object.assign({},u.devices):{};if(u.device&&u.device!=='null'&&!d[u.device])d[u.device]={name:'Legacy device',android:'?'};return d}
-function validKey(k){return k&&!/[.#$\[\]\/\s]/.test(k)}
+# =========================================================
+# ADMIN DASHBOARD & CLEANUP CONTROLLER
+# =========================================================
+def admin_dashboard_text():
+    config = load_config()
+    main_names = [
+        html.escape(str(c.get("name", c.get("chat_id"))))
+        for c in config["channels"]
+    ]
+    extra_names = [
+        html.escape(str(c.get("name", c.get("chat_id"))))
+        for c in config["fake_channels"]
+    ]
+    main_preview = "\n".join(
+        f" • {name}" for name in main_names[:8]
+    ) or " • None"
+    extra_preview = "\n".join(
+        f" • {name}" for name in extra_names[:8]
+    ) or " • None"
+    request_count = sum(
+        len(value)
+        for value in config["extra_requests"].values()
+        if isinstance(value, list)
+    )
+    return (
+        "👑 <b>SAKIL BHAI — VIP CONTROL CENTER</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "⚡ <b>ADMIN DASHBOARD</b>\n\n"
+        "🟢 System: ONLINE\n"
+        f"👥 Bot users: <b>{len(config['subscribers'])}</b>\n\n"
+        f"📢 Main channels: <b>{len(config['channels'])}</b>\n"
+        f"{main_preview}\n\n"
+        f"🔒 Extra channels: <b>{len(config['fake_channels'])}</b>\n"
+        f"{extra_preview}\n\n"
+        f"📨 Requests received: <b>{request_count}</b>\n"
+        f"🎁 Final messages: <b>{len(config['final_messages'])}</b>\n"
+        f"✅ Completed users: <b>{len(config['completed_users'])}</b>\n\n"
+        "⚡ Dashboard refreshes automatically after bot events.\n"
+        "━━━━━━━━━━━━━━━━━━━━"
+    )
 
-/* ===== AUTH ===== */
-var EYE_ON='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',EYE_OFF='<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
-$('eye').onclick=function(){var p=$('lp'),show=p.type==='password';p.type=show?'text':'password';this.innerHTML=show?EYE_OFF:EYE_ON;this.classList.toggle('on',show);p.focus()};
-function doLogin(){
- if(lkLeft()>0){showLock();return}
- $('le').textContent='';$('lsp').classList.remove('hide');$('lbt').textContent='CHECKING';$('lb').disabled=true;
- setTimeout(function(){
-  $('lsp').classList.add('hide');$('lbt').textContent='LOGIN';$('lb').disabled=false;
-  if($('lu').value.trim()===ADMIN_USER&&$('lp').value===ADMIN_PASS){lkReset();sessionStorage.setItem('sakil_admin','1');start()}
-  else{var c=$('lcard');c.classList.remove('shake');void c.offsetWidth;c.classList.add('shake');if(lkFail())showLock();else{var st=lkGet(),l=(st.level||0)>=1?0:5-st.fails;$('le').textContent='❌ Invalid credentials • '+(l>0?l+' attempts left':'1 error = 5 min lock')}}
- },600)}
-$('lb').onclick=doLogin;$('lp').onkeydown=$('lu').onkeydown=function(e){if(e.key==='Enter')doLogin()};
-$('lo').onclick=function(){sessionStorage.removeItem('sakil_admin');location.reload()};
-function start(){document.body.classList.add('in');$('login').classList.add('hide');$('app').classList.remove('hide');load()}
-if(sessionStorage.getItem('sakil_admin')==='1')start();
+async def refresh_admin_dashboard(bot):
+    global ADMIN_DASHBOARD_ID
+    if not ADMIN_DASHBOARD_ID:
+        return
+    try:
+        await bot.edit_message_text(
+            chat_id=ADMIN_ID,
+            message_id=ADMIN_DASHBOARD_ID,
+            text=admin_dashboard_text(),
+            parse_mode="HTML"
+        )
+    except TelegramError as error:
+        if "message is not modified" not in str(error).lower():
+            logger.warning("Dashboard refresh: %s", error)
 
-/* ===== LOAD / RENDER ===== */
-async function load(){if(!Object.keys(users).length)$('list').innerHTML='<div class="sk"></div><div class="sk"></div><div class="sk"></div>';try{users=(await db('userinfo'))||{};cfg=(await db('config/app'))||{};render();fillCfg()}catch(e){toast('Network error: '+e.message)}}
-$('rf').onclick=load;
-function render(){
- var all=Object.keys(users),c={a:0,b:0,e:0,d:0,x:0};
- all.forEach(function(k){var s=state(users[k]);if(s==='active')c.a++;else if(s==='banned')c.b++;else c.e++;c.d+=Object.keys(devsOf(users[k])).length;if(s==='active'){var dd=dLeft(users[k].validity);if(dd!==null&&dd<=3)c.x++}});
- $('stats').innerHTML=[['Total Users',all.length],['Active',c.a],['Banned',c.b],['Expired',c.e],['Expiring ≤3d',c.x],['Devices',c.d]].map(function(x){return'<div class="card stat"><b>'+x[1]+'</b><small>'+x[0]+'</small></div>'}).join('');
- var q=$('q').value.trim().toLowerCase(),h='';
- $('chips').innerHTML=['all','active','banned','expired'].map(function(f){return'<button class="chip '+(flt===f?'on':'')+'" data-f="'+f+'">'+f.toUpperCase()+'</button>'}).join('');
- all.filter(function(k){return k.toLowerCase().indexOf(q)>-1&&(flt==='all'||state(users[k])===flt)}).sort(sorter).forEach(function(k){
-  var u=users[k],s=state(u),dc=Object.keys(devsOf(u)).length,mx=maxOf(u);
-  h+='<div class="card u"><div class="h"><span class="n">'+esc(k)+'</span><span class="badge b-'+s[0]+'">'+s.toUpperCase()+'</span></div>'+
-  '<div class="meta"><span>🔑 Key: <b>'+esc(u.password||k)+'</b></span><span>⏳ <b>'+esc(u.validity||'-')+'</b>'+dlBadge(u.validity)+'</span>'+lastSeen(u)+'<span>📱 <b>'+dc+' / '+(mx>=9999?'∞':mx)+'</b></span></div>'+
-  '<div class="acts" data-u="'+esc(k)+'"><button class="btn s '+(u.status==='banned'?'ok':'')+'" data-a="ban">'+(u.status==='banned'?'✓ Unban':'⛔ Ban')+'</button>'+
-  '<button class="btn g s" data-a="copy">📋 Copy</button><button class="btn g s" data-a="ext">+30 Days</button><button class="btn g s" data-a="dev">📱 Devices</button><button class="btn g s" data-a="edit">✎ Edit</button><button class="btn g s" data-a="del">🗑 Delete</button></div></div>'});
- $('list').innerHTML=h||'<div class="empty">No users found</div>'}
-$('q').oninput=render;
-document.querySelectorAll('.tab').forEach(function(t){t.onclick=function(){document.querySelectorAll('.tab').forEach(function(x){x.classList.toggle('on',x===t)});$('t-users').classList.toggle('hide',t.dataset.t!=='users');$('t-settings').classList.toggle('hide',t.dataset.t!=='settings')}});
+async def delete_message_safely(bot, chat_id, message_id):
+    if not message_id:
+        return
+    try:
+        await bot.delete_message(
+            chat_id=chat_id,
+            message_id=message_id
+        )
+    except TelegramError:
+        pass
 
-/* ===== PICKER UI ===== */
-var VAL_OPTS=[['1','1','Day'],['7','7','Days'],['15','15','Days'],['30','30','Days'],['90','90','Days'],['365','1','Year'],['life','∞','Lifetime']];
-var DEV_OPTS=[1,2,3,4,5,6,7,8,9,10].map(function(n){return[String(n),n,n>1?'Devices':'Device']}).concat([['9999','∞','Unlimited']]);
-function pick(id,opts,sel){return'<div class="pick" id="'+id+'">'+opts.map(function(o){return'<button type="button" class="pk'+(String(o[0])===String(sel)?' on':'')+'" data-v="'+o[0]+'"><b>'+o[1]+'</b><small>'+o[2]+'</small></button>'}).join('')+'</div>'}
-function gp(scope,id){var b=scope.querySelector('#'+id+' .pk.on');return b?b.dataset.v:''}
-document.addEventListener('click',function(e){var b=e.target.closest('.pk');if(!b)return;b.parentNode.querySelectorAll('.pk').forEach(function(x){x.classList.toggle('on',x===b)})});
+async def show_admin_dashboard(message, context):
+    global ADMIN_DASHBOARD_ID, ADMIN_TRANSIENT_ID
+    
+    # Purono kono option ba message thakle seta delete kore dibe
+    if ADMIN_TRANSIENT_ID:
+        await delete_message_safely(context.bot, ADMIN_ID, ADMIN_TRANSIENT_ID)
+        ADMIN_TRANSIENT_ID = None
 
-/* ===== MODALS ===== */
-function modal(html){var m=document.createElement('div');m.className='modal';m.innerHTML='<div class="card">'+html+'</div>';m.onclick=function(e){if(e.target===m)m.remove()};document.body.appendChild(m);return m}
-function rnd(n){var c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',r='';for(var i=0;i<n;i++)r+=c[Math.floor(Math.random()*c.length)];return r}
-function genKey(){return'sakil-'+rnd(4)+'-'+rnd(4)}
-function userForm(k){
- var u=k?users[k]:{},mx=k?maxOf(u):1;
- var m=modal('<h3 class="rj" style="font-size:1.4rem">'+(k?'Edit User':'Add User')+'</h3>'+
- '<label>User Password / Key</label><div class="row" style="flex-wrap:nowrap"><input id="fp" value="'+esc(u.password||k||genKey())+'" autocomplete="off"><button class="btn g s" id="fg">Generate</button></div>'+
- '<label>Validity</label>'+pick('fv',VAL_OPTS.concat(k?[['keep','↺','Keep']]:[]),k?'keep':'7')+
- '<label>Max Devices</label>'+pick('fm',DEV_OPTS,String(mx))+
- '<div class="row" style="margin-top:20px"><button class="btn g" style="flex:1" id="fc">Cancel</button><button class="btn" style="flex:1" id="fs">Save</button></div>');
- m.querySelector('#fg').onclick=function(){m.querySelector('#fp').value=genKey()};
- m.querySelector('#fc').onclick=function(){m.remove()};
- m.querySelector('#fs').onclick=async function(){
-  var pw=m.querySelector('#fp').value.trim(),name=pw,v=gp(m,'fv'),mx2=+gp(m,'fm');
-  if(!pw)return toast('Password required');
-  if(!validKey(pw))return toast('Key cannot contain spaces or special characters');
-  if(name!==k&&users[name])return toast('This key already exists');
-  var o=k?Object.assign({},u):{};
-  o.password=pw;o.maxDevices=mx2;o.access=mx2>1?'∞':'1';
-  if(v==='life')o.validity='lifetime';else if(v!=='keep'){var d=new Date();d.setDate(d.getDate()+(+v));o.validity=fmt(d)}
-  if(!k){o.status='active';o.created=Date.now()}
-  try{
-   if(k&&name!==k){await db('userinfo/'+encodeURIComponent(k),'DELETE');await db('userinfo/'+encodeURIComponent(name),'PUT',o)}
-   else if(k){await db('userinfo/'+encodeURIComponent(k),'PATCH',o)}
-   else{await db('userinfo/'+encodeURIComponent(name),'PUT',o)}
-   m.remove();toast(k?'User updated':'User added');load()
-  }catch(e){toast('Error: '+e.message)}
- }}
-$('add').onclick=function(){userForm()};
+    await delete_message_safely(
+        context.bot,
+        message.chat_id,
+        message.message_id
+    )
+    
+    if ADMIN_DASHBOARD_ID:
+        try:
+            await context.bot.edit_message_text(
+                chat_id=ADMIN_ID,
+                message_id=ADMIN_DASHBOARD_ID,
+                text=admin_dashboard_text(),
+                parse_mode="HTML",
+                reply_markup=None
+            )
+            return
+        except TelegramError:
+            ADMIN_DASHBOARD_ID = None
 
-/* ===== USER ACTIONS ===== */
-$('list').onclick=async function(e){
- var b=e.target.closest('button[data-a]');if(!b)return;var k=b.parentNode.dataset.u,a=b.dataset.a,p='userinfo/'+encodeURIComponent(k);
- try{
-  if(a==='ban'){var ns=users[k].status==='banned'?'active':'banned';await db(p+'/status','PUT',ns);toast(ns==='banned'?'User banned':'User unbanned');load()}
-  else if(a==='edit')userForm(k);
-  else if(a==='del')ask('Delete user '+k+' permanently?',async function(){try{await db(p,'DELETE');toast('User deleted');load()}catch(x){toast('Error: '+x.message)}});
-  else if(a==='copy'){await copyTxt('Key: '+(users[k].password||k)+'\nValidity: '+users[k].validity);toast('Login details copied','info')}
-  else if(a==='ext'){var u=users[k];if(String(u.validity).toLowerCase()==='lifetime')return toast('Already lifetime','warn');var d=parseV(u.validity);if(!d||d<new Date())d=new Date();d.setDate(d.getDate()+30);await db(p+'/validity','PUT',fmt(d));toast(k+' extended +30 days');load()}
-  else if(a==='dev')devModal(k)
- }catch(x){toast('Error: '+x.message)}};
-function devModal(k){
- var d=devsOf(users[k]),ids=Object.keys(d),p='userinfo/'+encodeURIComponent(k);
- var m=modal('<h3 class="rj" style="font-size:1.4rem">Devices – '+esc(k)+'</h3><p style="color:var(--mut);font-size:.8rem;margin:4px 0 10px">'+ids.length+' devices registered</p>'+
- (ids.map(function(i){var x=d[i];return'<div class="dev"><div><b>📱 '+esc(x.name||'Unknown')+'</b><small>Android '+esc(x.android||'?')+'</small></div><button class="btn g s" data-i="'+esc(i)+'">Remove</button></div>'}).join('')||'<div class="empty">No devices logged in</div>')+
- '<div class="row" style="margin-top:16px"><button class="btn g" style="flex:1" id="dc">Close</button>'+(ids.length?'<button class="btn" style="flex:1" id="dr">Reset all</button>':'')+'</div>');
- m.querySelector('#dc').onclick=function(){m.remove()};
- var r=m.querySelector('#dr');if(r)r.onclick=async function(){await db(p+'/devices','DELETE');await db(p+'/device','DELETE');m.remove();toast('All devices reset');load()};
- m.querySelectorAll('button[data-i]').forEach(function(x){x.onclick=async function(){var id=x.dataset.i;await db(p+'/devices/'+encodeURIComponent(id.replace(/[.#$\[\]\/]/g,'_')),'DELETE');if(users[k].device===id)await db(p+'/device','DELETE');m.remove();toast('Device removed');await load();devModal(k)}})}
+    sent = await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=admin_dashboard_text(),
+        parse_mode="HTML",
+        reply_markup=ADMIN_KEYBOARD
+    )
+    ADMIN_DASHBOARD_ID = sent.message_id
 
-/* ===== SETTINGS ===== */
-function fillCfg(){$('mOn').checked=!!cfg.maintenance;$('mMsg').value=cfg.maintenanceMsg||'';$('uVer').value=cfg.latestVersion||'';$('uUrl').value=cfg.updateUrl||'';$('uMsg').value=cfg.updateMsg||'';$('uForce').checked=!!cfg.forceUpdate;fillNotice()}
-$('saveCfg').onclick=async function(){
- var o={maintenance:$('mOn').checked,maintenanceMsg:$('mMsg').value.trim(),latestVersion:$('uVer').value.trim(),updateUrl:$('uUrl').value.trim(),updateMsg:$('uMsg').value.trim(),forceUpdate:$('uForce').checked,noticeOn:$('nOn').checked,noticeTitle:$('nTitle').value.trim(),noticeDesc:$('nDesc').value.trim(),noticeBtns:gp(document,'nb')||'ok'};
- try{await db('config/app','PUT',o);cfg=o;toast('Settings saved ✓')}catch(e){toast('Error: '+e.message)}};
+async def admin_notice(message, context, text, parse_mode=None, reply_markup=None):
+    global ADMIN_TRANSIENT_ID
+    # Prothome ager option/message ti completely delete korbe
+    if ADMIN_TRANSIENT_ID:
+        await delete_message_safely(
+            context.bot,
+            ADMIN_ID,
+            ADMIN_TRANSIENT_ID
+        )
+    
+    sent = await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=text,
+        parse_mode=parse_mode,
+        reply_markup=reply_markup or ADMIN_KEYBOARD
+    )
+    ADMIN_TRANSIENT_ID = sent.message_id
 
-/* ===== EXTRAS & TOOLS ===== */
-$('chips').onclick=function(e){var b=e.target.closest('[data-f]');if(b){flt=b.dataset.f;render()}};
-$('bulk').onclick=function(){
- var m=modal('<h3 class="rj" style="font-size:1.4rem">Bulk Key Generator</h3><label>Number of keys (max 50)</label><input id="bn" type="number" value="5" min="1" max="50"><label>Key Prefix</label><input id="bp" value="sakil-"><label>Validity</label>'+pick('bv',VAL_OPTS.slice(0,4).concat([VAL_OPTS[6]]),'7')+'<label>Devices per key</label>'+pick('bm',DEV_OPTS.slice(0,3),'1')+'<div class="row" style="margin-top:20px"><button class="btn g" style="flex:1" id="bc">Cancel</button><button class="btn" style="flex:1" id="bg">Generate</button></div>');
- m.querySelector('#bc').onclick=function(){m.remove()};
- m.querySelector('#bg').onclick=async function(){
-  var n=Math.min(50,Math.max(1,+m.querySelector('#bn').value||1)),pre=m.querySelector('#bp').value.trim(),v=gp(m,'bv'),mx=+gp(m,'bm'),out=[];
-  var val;if(v==='life')val='lifetime';else{var d=new Date();d.setDate(d.getDate()+(+v));val=fmt(d)}
-  try{for(var i=0;i<n;i++){var name=pre+rnd(4)+'-'+rnd(4),pw=name;if(users[name]){i--;continue}
-   await db('userinfo/'+encodeURIComponent(name),'PUT',{password:pw,status:'active',created:Date.now(),validity:val,maxDevices:mx,access:mx>1?'∞':'1'});users[name]={password:pw,status:'active',created:Date.now(),validity:val,maxDevices:mx,access:mx>1?'∞':'1'};out.push(pw+' | '+val)}
-   m.remove();var r=modal('<h3 class="rj" style="font-size:1.3rem">'+n+' keys ready</h3><textarea readonly id="bo">'+esc(out.join('\n'))+'</textarea><div class="row" style="margin-top:14px"><button class="btn g" style="flex:1" id="rc">Close</button><button class="btn" style="flex:1" id="rcp">Copy All</button></div>');
-   r.querySelector('#rc').onclick=function(){r.remove()};r.querySelector('#rcp').onclick=async function(){await copyTxt(out.join('\n'));toast('Copied to clipboard','info')};load()
-  }catch(e){toast('Error: '+e.message)}}};
-$('exp').onclick=function(){var rows=['key,status,validity,devices'];Object.keys(users).forEach(function(k){var u=users[k];rows.push([u.password||k,state(u),u.validity,maxOf(u)].join(','))});
- var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([rows.join('\n')],{type:'text/csv'}));a.download='sakil_users.csv';document.body.appendChild(a);a.click();a.remove();toast('CSV Exported successfully')};
-$('clean').onclick=function(){var ex=Object.keys(users).filter(function(k){return state(users[k])==='expired'});if(!ex.length)return toast('No expired users','info');
- ask('Delete all expired users?',async function(){try{for(var i=0;i<ex.length;i++)await db('userinfo/'+encodeURIComponent(ex[i]),'DELETE');toast('Expired users cleaned');load()}catch(e){toast('Error: '+e.message)}})};
+# =========================================================
+# MEMBERSHIP CHECK & TRACKING
+# =========================================================
+async def get_membership_status(user_id, context, channels):
+    statuses = {}
+    for channel in channels:
+        chat_id = channel.get("chat_id")
+        key = str(chat_id)
+        try:
+            member = await context.bot.get_chat_member(
+                chat_id=chat_id,
+                user_id=user_id
+            )
+            joined = member.status not in ("left", "kicked")
+            if member.status == "restricted":
+                joined = bool(getattr(member, "is_member", False))
+            statuses[key] = joined
+        except TelegramError as error:
+            logger.warning("Membership check failed for %s: %s", chat_id, error)
+            statuses[key] = False
+    return statuses
 
-/* ===== THEME CUSTOMIZER (DEFAULT CYAN) ===== */
-var PAL=[['Cyan','#00e5ff'],['Neon Red','#ff1744'],['Neon Green','#39ff14'],['Purple','#b44cff'],['Blue','#2979ff'],['Pink','#ff2bd6'],['Orange','#ff9100'],['Teal','#1de9b6']];
-window.PRGB='0,229,255';
-function hx(h){h=h.replace('#','');if(h.length===3)h=h.split('').map(function(c){return c+c}).join('');return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]}
-function applyTheme(h,save){var c=hx(h),d=c.map(function(v){return Math.round(v*.7)}),r=document.documentElement.style;
- r.setProperty('--red',h);r.setProperty('--red2','rgb('+d.join(',')+')');r.setProperty('--rgb',c.join(','));window.PRGB=c.join(',0,229,255'.split(',').slice(0,3).join(','));
- if(save!==false){try{localStorage.setItem('sakil_theme',h)}catch(e){}}}
-try{var sv=localStorage.getItem('sakil_theme');if(sv)applyTheme(sv,false)}catch(e){applyTheme('#00e5ff',false)}
-function palette(){
- var cur=getComputedStyle(document.documentElement).getPropertyValue('--red').trim().toLowerCase();
- var m=modal('<h3 class="rj" style="font-size:1.4rem">🎨 Theme Palette</h3><p style="color:var(--mut);font-size:.82rem;margin-top:4px">Select theme color</p><div class="sc8">'+
-  PAL.map(function(c){return'<button class="sc'+(c[1]===cur?' on':'')+'" data-c="'+c[1]+'" title="'+c[0]+'" style="--c:'+c[1]+';background:'+c[1]+'"></button>'}).join('')+
-  '</div><div class="row" style="margin-top:18px"><button class="btn" style="flex:1" id="cd">Close</button></div>');
- m.querySelectorAll('.sc').forEach(function(b){b.onclick=function(){applyTheme(b.dataset.c);m.querySelectorAll('.sc').forEach(function(x){x.classList.toggle('on',x===b)})}});
- m.querySelector('#cd').onclick=function(){m.remove()}}
-$('fab').onclick=palette;$('pal').onclick=palette;
+def get_user_extra_requests(config, user_id):
+    values = config["extra_requests"].get(str(user_id), [])
+    return set(str(x) for x in values)
 
-/* ===== DRAWER MENU ===== */
-function dr(o){$('drawer').classList.toggle('on',o);$('dov').classList.toggle('on',o)}
-function gotoTab(n){document.querySelector('.tab[data-t="'+n+'"]').click()}
-$('burger').onclick=function(){dr(true)};$('dov').onclick=$('dx').onclick=function(){dr(false)};
-$('drawer').addEventListener('click',function(e){if(e.target.closest('.di'))dr(false)});
-$('add2').onclick=function(){gotoTab('users');userForm()};
-$('srch').onclick=function(){gotoTab('users');setTimeout(function(){$('q').focus()},300)};
-$('goU').onclick=function(){gotoTab('users')};$('goS').onclick=function(){gotoTab('settings')};
-document.querySelectorAll('[data-df]').forEach(function(b){b.onclick=function(){gotoTab('users');flt=b.dataset.df;render()}});
+def all_extra_requests_received(config, user_id):
+    channels = config["fake_channels"]
+    if not channels:
+        return True
+    received = get_user_extra_requests(config, user_id)
+    required = {str(channel["chat_id"]) for channel in channels}
+    return required.issubset(received)
 
-/* ===== PARTICLE BACKGROUND ===== */
-(function(){
- var cv=$('pc'),x=cv.getContext('2d'),P=[],W=0,H=0;
- function init(){W=cv.width=window.innerWidth;H=cv.height=window.innerHeight;P=[];var n=Math.min(70,Math.floor(W*H/12000));
-  for(var i=0;i<n;i++)P.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-.5)*.7,vy:(Math.random()-.5)*.7,r:Math.random()*2+1,h:Math.random()*6.28})}
- function draw(){
-  var c=window.PRGB;x.clearRect(0,0,W,H);
-  for(var i=0;i<P.length;i++){var p=P[i];p.x+=p.vx;p.y+=p.vy;p.h+=.02;
-   if(p.x<0||p.x>W)p.vx*=-1;if(p.y<0||p.y>H)p.vy*=-1;
-   x.fillStyle='rgba('+c+',.8)';x.beginPath();x.arc(p.x,p.y,p.r,0,6.283);x.fill();
-   for(var j=i+1;j<P.length;j++){var q=P[j],ax=p.x-q.x,ay=p.y-q.y,dd=ax*ax+ay*ay;
-    if(dd<14400){x.strokeStyle='rgba('+c+','+(.4*(1-dd/14400))+')';x.lineWidth=1;x.beginPath();x.moveTo(p.x,p.y);x.lineTo(q.x,q.y);x.stroke()}}
-   }
-  requestAnimationFrame(draw)}
- window.addEventListener('resize',init);
- init();draw();
-})();
+# =========================================================
+# USER KEYBOARD & MESSAGING
+# =========================================================
+def build_channel_keyboard(channels, statuses=None, request_mode=False):
+    statuses = statuses or {}
+    keyboard = []
+    row = []
+    for channel in channels:
+        url = channel.get("url")
+        if not url:
+            continue
+        chat_id = str(channel.get("chat_id"))
+        if request_mode:
+            label = "📨 REQUEST SENT" if statuses.get(chat_id) else "✨ JOIN CHANNEL"
+        else:
+            if statuses.get(chat_id) is True:
+                label = "✅ JOINED"
+            elif statuses.get(chat_id) is False:
+                label = "🚫 NOT JOINED"
+            else:
+                label = "✨ JOIN CHANNEL"
+        row.append(InlineKeyboardButton(label, url=url))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+    if channels:
+        keyboard.append([InlineKeyboardButton("🔄 VERIFY", callback_data="verify_membership")])
+    return InlineKeyboardMarkup(keyboard) if keyboard else None
 
-/* ===== ATTENTION DIALOG ===== */
-var NB_OPTS=[['ok','OK','Only OK'],['exit','EXIT','Only Exit'],['both','OK+EXIT','Both']];
-function fillNotice(){$('nOn').checked=!!cfg.noticeOn;$('nTitle').value=cfg.noticeTitle||'';$('nDesc').value=cfg.noticeDesc||'';$('nBtn').innerHTML=pick('nb',NB_OPTS,cfg.noticeBtns||'ok')}
-$('nPrev').onclick=function(){var b=gp(document,'nb')||'ok',t=($('nTitle').value.trim()||'ATTENTION').toUpperCase(),d=$('nDesc').value.trim();
- var m=modal('<div style="text-align:center"><div style="font-size:2.4rem">⚠️</div><h3 class="rj" style="font-size:1.6rem;margin:6px 0 10px">'+esc(t)+'</h3><p style="color:#ddd;white-space:pre-line;font-size:.9rem;margin-bottom:18px">'+esc(d||'(description empty)')+'</p>'+
- (b!=='exit'?'<button class="btn" id="pk1" style="width:100%;margin-bottom:10px">OK</button>':'')+(b!=='ok'?'<button class="btn g" id="pk2" style="width:100%">EXIT</button>':'')+'</div>');
- ['pk1','pk2'].forEach(function(i){var e=m.querySelector('#'+i);if(e)e.onclick=function(){m.remove()}})};
+async def copy_saved_message(context, destination, saved_message, reply_markup=None):
+    if not isinstance(saved_message, dict):
+        return None
+    source_chat = saved_message.get("chat_id")
+    source_message = saved_message.get("message_id")
+    if source_chat is None or source_message is None:
+        return None
+    try:
+        return await context.bot.copy_message(
+            chat_id=destination,
+            from_chat_id=source_chat,
+            message_id=source_message,
+            reply_markup=reply_markup
+        )
+    except TelegramError:
+        logger.exception("Message copy failed")
+        return None
 
-/* ===== SECURITY LOCK ===== */
-var LK_KEY='sakil_admin_lock',lkTimer=null;
-function lkGet(){try{return JSON.parse(localStorage.getItem(LK_KEY))||{}}catch(e){return{}}}
-function lkSet(o){try{localStorage.setItem(LK_KEY,JSON.stringify(o))}catch(e){}}
-function lkReset(){try{localStorage.removeItem(LK_KEY)}catch(e){}}
-function lkLeft(){var s=lkGet();return(s.until&&s.until>Date.now())?Math.ceil((s.until-Date.now())/1000):0}
-function lkFail(){var s=lkGet();s.fails=(s.fails||0)+1;
- if((s.level||0)>=1||s.fails>=5){s.level=Math.min(2,(s.level||0)+1);s.total=s.level===1?60:300;s.until=Date.now()+s.total*1000;s.fails=0;lkSet(s);return true}
- lkSet(s);return false}
-function showLock(){
- if(lkLeft()<=0)return false;
- var s=lkGet(),total=s.total||60,ov=$('lockOv');
- if(!ov){ov=document.createElement('div');ov.id='lockOv';ov.className='modal';ov.style.zIndex='200';document.body.appendChild(ov)}
- ov.style.display='flex';
- ov.innerHTML='<div class="card" style="text-align:center;max-width:380px"><div style="font-size:2.6rem">🔒</div><h3 class="rj" style="font-size:1.6rem;margin-top:6px">LOGIN LOCKED</h3>'+
-  '<p style="color:#ddd;font-size:.88rem;margin-top:8px">Too many failed attempts. Locked for <b>'+Math.ceil(total/60)+' minutes</b>.</p>'+
-  '<div class="lk-t" id="lkT">00:00</div><div class="lk-bar"><i id="lkB"></i></div></div>';
- clearInterval(lkTimer);
- function tick(){var l=lkLeft();
-  if(l<=0){clearInterval(lkTimer);ov.style.display='none';toast('Unlocked - try again','info');return}
-  var m=Math.floor(l/60),sec=l%60;$('lkT').textContent=(m<10?'0':'')+m+':'+(sec<10?'0':'')+sec;
-  $('lkB').style.width=Math.max(0,(s.until-Date.now())/(total*10))+'%'}
- tick();lkTimer=setInterval(tick,250);return true}
-if(lkLeft()>0)showLock();
+async def send_final_contents(context, user_id):
+    config = load_config()
+    if user_id in config["completed_users"]:
+        return
+    saved_messages = config["final_messages"]
+    if not saved_messages:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="✅ Verification complete.\nNo final content is configured yet."
+        )
+        return
+    success = 0
+    failed = 0
+    for saved in saved_messages:
+        result = await copy_saved_message(context, user_id, saved)
+        if result:
+            success += 1
+        else:
+            failed += 1
+        await asyncio.sleep(0.15)
+    if failed == 0:
+        config = load_config()
+        if user_id not in config["completed_users"]:
+            config["completed_users"].append(user_id)
+            save_config(config)
+        await refresh_admin_dashboard(context.bot)
+    else:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=(
+                "⚠️ Some content could not be delivered.\n"
+                f"✅ Delivered: {success}\n"
+                f"❌ Failed: {failed}\n"
+                "Please press VERIFY again to retry."
+            )
+        )
 
-/* ===== HELPERS ===== */
-function dLeft(v){if(String(v).toLowerCase()==='lifetime')return null;var d=parseV(v);return d?(d-Date.now())/864e5:-1}
-function dlBadge(v){if(String(v).toLowerCase()==='lifetime')return'<i class="dl">∞ Lifetime</i>';var n=dLeft(v);if(n===null)return'';
- if(n<0)return'<i class="dl x">Expired</i>';if(n<1){var h=Math.max(1,Math.floor(n*24));return'<i class="dl x">'+h+'h left</i>'}
- var d=Math.floor(n);return'<i class="dl '+(d<=3?'w':'')+'">'+d+'d left</i>'}
-function ago(t){var s=Math.floor((Date.now()-t)/1000);if(s<60)return'just now';var m=Math.floor(s/60);if(m<60)return m+'m ago';var h=Math.floor(m/60);if(h<24)return h+'h ago';var d=Math.floor(h/24);return d+'d ago'}
-function lastSeen(u){var t=0,d=devsOf(u);Object.keys(d).forEach(function(i){if(d[i]&&d[i].time>t)t=d[i].time});return t?'<span>🕒 <b>'+ago(t)+'</b></span>':''}
-var SORTS=[['name','⇅ A-Z'],['expiry','⏳ Expiring'],['new','🆕 Newest']],sortI=0;
-function sorter(x,y){var m=SORTS[sortI][0];
- if(m==='expiry'){var a1=dLeft(users[x].validity),b1=dLeft(users[y].validity);a1=a1===null?9e9:a1;b1=b1===null?9e9:b1;return a1-b1}
- if(m==='new')return(users[y].created||0)-(users[x].created||0);
- return x.toLowerCase()<y.toLowerCase()?-1:1}
-$('sortb').onclick=function(){sortI=(sortI+1)%SORTS.length;this.textContent=SORTS[sortI][1];render()};
-</script></body></html>'''
+# =========================================================
+# USER STAGES
+# =========================================================
+def default_user_welcome():
+    return (
+        "👑 <b>WELCOME TO SAKIL BHAI VIP</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🔐 <b>VIP ACCESS VERIFICATION</b>\n\n"
+        "1️⃣ Join all channels shown below.\n"
+        "2️⃣ Press VERIFY to check.\n"
+        "3️⃣ Complete all channel verification steps.\n\n"
+        "🎁 Your content will unlock automatically.\n"
+        "━━━━━━━━━━━━━━━━━━━━"
+    )
 
-@app.route('/')
-def admin_panel():
-    return render_template_string(ADMIN_HTML)
+async def send_stage_message(context, user_id, channels, statuses, request_mode=False):
+    config = load_config()
+    keyboard = build_channel_keyboard(channels, statuses, request_mode)
+    welcome = config.get("welcome_message")
+    if welcome:
+        copied = await copy_saved_message(context, user_id, welcome, reply_markup=keyboard)
+        if copied:
+            return
+    if request_mode:
+        text = (
+            "👑 <b>VIP ACCESS VERIFICATION</b>\n"
+            "━━━━━━━━━━━━━━━━━━━━\n\n"
+            "✨ Open every channel below and complete the joining step.\n\n"
+            "📨 Your request will be recorded automatically.\n"
+            "🔄 Press VERIFY after completing all channels."
+        )
+    else:
+        text = default_user_welcome()
+    await context.bot.send_message(
+        chat_id=user_id,
+        text=text,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
 
-@app.route('/connect', methods=['GET', 'POST'])
-def connect_panel():
-    return jsonify({
-        "status": "success",
-        "message": "Connected successfully with User Panel via /connect route!",
-        "timestamp": datetime.datetime.utcnow().isoformat()
-    })
+async def show_current_stage(context, user_id):
+    config = load_config()
+    if user_id in config["completed_users"]:
+        return
+    main_channels = config["channels"]
+    main_status = await get_membership_status(user_id, context, main_channels)
+    if not all(main_status.values()):
+        config = load_config()
+        if user_id in config["main_passed"]:
+            config["main_passed"].remove(user_id)
+            save_config(config)
+        await send_stage_message(context, user_id, main_channels, main_status)
+        return
+    
+    config = load_config()
+    if user_id not in config["main_passed"]:
+        config["main_passed"].append(user_id)
+        save_config(config)
+    
+    config = load_config()
+    extra_channels = config["fake_channels"]
+    if not extra_channels:
+        await send_final_contents(context, user_id)
+        return
+    if all_extra_requests_received(config, user_id):
+        await send_final_contents(context, user_id)
+        return
+    
+    requests = get_user_extra_requests(config, user_id)
+    extra_status = {
+        str(channel["chat_id"]): str(channel["chat_id"]) in requests
+        for channel in extra_channels
+    }
+    await send_stage_message(context, user_id, extra_channels, extra_status, request_mode=True)
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+# =========================================================
+# START & HANDLERS
+# =========================================================
+async def start(update, context):
+    if not update.message:
+        return
+    user = update.effective_user
+    if not user:
+        return
+    if user.id == ADMIN_ID:
+        ADMIN_STATE.pop(user.id, None)
+        await show_admin_dashboard(update.message, context)
+        return
+    
+    user_id = user.id
+    config = load_config()
+    if user_id not in config["subscribers"]:
+        config["subscribers"].append(user_id)
+        save_config(config)
+        await refresh_admin_dashboard(context.bot)
+    
+    if user_id in config["completed_users"]:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="✅ Your VIP verification is already completed."
+        )
+        return
+    await show_current_stage(context, user_id)
+
+async def extra_join_request_handler(update, context):
+    request = update.chat_join_request
+    if not request:
+        return
+    user_id = request.from_user.id
+    chat_id = str(request.chat.id)
+    config = load_config()
+    matched = any(
+        str(channel.get("chat_id")) == chat_id
+        for channel in config["fake_channels"]
+    )
+    if not matched:
+        return
+    if user_id not in config["subscribers"]:
+        config["subscribers"].append(user_id)
+    requests = config["extra_requests"].setdefault(str(user_id), [])
+    if chat_id not in requests:
+        requests.append(chat_id)
+    if not save_config(config):
+        logger.error("Could not save Join Request")
+        return
+    await refresh_admin_dashboard(context.bot)
+    
+    config = load_config()
+    main_status = await get_membership_status(user_id, context, config["channels"])
+    if not all(main_status.values()):
+        return
+    if user_id not in config["main_passed"]:
+        config["main_passed"].append(user_id)
+        save_config(config)
+    
+    config = load_config()
+    if all_extra_requests_received(config, user_id):
+        await send_final_contents(context, user_id)
+        return
+    
+    received = get_user_extra_requests(config, user_id)
+    total = len(config["fake_channels"])
+    await context.bot.send_message(
+        chat_id=user_id,
+        text=(
+            f"📨 Channel verification: {len(received)}/{total}\n"
+            "Complete the remaining channels to continue."
+        )
+    )
+
+async def verify_handler(update, context):
+    query = update.callback_query
+    user_id = query.from_user.id
+    await query.answer()
+    if user_id == ADMIN_ID:
+        return
+    config = load_config()
+    if user_id in config["completed_users"]:
+        await query.answer("Already verified.", show_alert=True)
+        return
+    
+    main_channels = config["channels"]
+    main_status = await get_membership_status(user_id, context, main_channels)
+    if not all(main_status.values()):
+        config = load_config()
+        if user_id in config["main_passed"]:
+            config["main_passed"].remove(user_id)
+            save_config(config)
+        keyboard = build_channel_keyboard(main_channels, main_status)
+        try:
+            await query.message.edit_reply_markup(reply_markup=keyboard)
+        except TelegramError:
+            pass
+        await query.answer("Please join all channels first.", show_alert=True)
+        return
+    
+    config = load_config()
+    if user_id not in config["main_passed"]:
+        config["main_passed"].append(user_id)
+        save_config(config)
+    
+    config = load_config()
+    extra_channels = config["fake_channels"]
+    if extra_channels:
+        if not all_extra_requests_received(config, user_id):
+            requests = get_user_extra_requests(config, user_id)
+            extra_status = {
+                str(channel["chat_id"]): str(channel["chat_id"]) in requests
+                for channel in extra_channels
+            }
+            keyboard = build_channel_keyboard(extra_channels, extra_status, request_mode=True)
+            try:
+                await query.message.edit_reply_markup(reply_markup=keyboard)
+            except TelegramError:
+                pass
+            await query.answer(f"Completed: {len(requests)}/{len(extra_channels)}", show_alert=True)
+            return
+    
+    try:
+        await query.message.edit_reply_markup(reply_markup=None)
+    except TelegramError:
+        pass
+    await send_final_contents(context, user_id)
+
+# =========================================================
+# ADMIN CALLBACKS & MENUS
+# =========================================================
+async def show_broadcast_targets(message, context):
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("👥 ALL BOT USERS", callback_data="target_users")],
+        [InlineKeyboardButton("📢 ALL CHANNELS", callback_data="target_channels")],
+        [InlineKeyboardButton("🚀 USERS + CHANNELS", callback_data="target_both")],
+    ])
+    global ADMIN_TRANSIENT_ID
+    if ADMIN_TRANSIENT_ID:
+        await delete_message_safely(context.bot, ADMIN_ID, ADMIN_TRANSIENT_ID)
+    
+    sent = await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text="📢 <b>BROADCAST CENTER</b>\n\nChoose where to publish:",
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+    ADMIN_TRANSIENT_ID = sent.message_id
+
+async def show_manage_channels(chat_id, context):
+    config = load_config()
+    rows = [
+        [InlineKeyboardButton(f"📢 MAIN ({len(config['channels'])})", callback_data="manage_main")],
+        [InlineKeyboardButton(f"🔒 EXTRA ({len(config['fake_channels'])})", callback_data="manage_extra")],
+    ]
+    global ADMIN_TRANSIENT_ID
+    if ADMIN_TRANSIENT_ID:
+        await delete_message_safely(context.bot, ADMIN_ID, ADMIN_TRANSIENT_ID)
+    
+    sent = await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text="🗂 <b>CHANNEL MANAGER</b>\nChoose which group to view or delete.",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(rows)
+    )
+    ADMIN_TRANSIENT_ID = sent.message_id
+
+async def show_channel_list(query, context, group):
+    config = load_config()
+    key = "channels" if group == "main" else "fake_channels"
+    channels = config[key]
+    title = "MAIN CHANNELS" if group == "main" else "EXTRA CHANNELS"
+    rows = []
+    for index, channel in enumerate(channels):
+        name = str(channel.get("name") or channel.get("chat_id"))[:35]
+        rows.append([InlineKeyboardButton(f"🗑 {index + 1}. {name}", callback_data=f"askdel:{group}:{index}")])
+    rows.append([InlineKeyboardButton("🔙 BACK", callback_data="manage_back")])
+    body = f"📋 <b>{title}</b> — Total: <b>{len(channels)}</b>\n\n"
+    if channels:
+        body += "Tap a channel to request deletion. It will not be deleted until you confirm."
+    else:
+        body += "No channel added in this group."
+    await query.edit_message_text(body, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(rows))
+
+async def button_handler(update, context):
+    query = update.callback_query
+    data = query.data
+    user_id = query.from_user.id
+    if data == "verify_membership":
+        await verify_handler(update, context)
+        return
+    if user_id != ADMIN_ID:
+        await query.answer("Unauthorized.", show_alert=True)
+        return
+    await query.answer()
+
+    if data == "manage_main":
+        await show_channel_list(query, context, "main")
+        return
+    if data == "manage_extra":
+        await show_channel_list(query, context, "extra")
+        return
+    if data == "manage_back":
+        config = load_config()
+        rows = [
+            [InlineKeyboardButton(f"📢 MAIN ({len(config['channels'])})", callback_data="manage_main")],
+            [InlineKeyboardButton(f"🔒 EXTRA ({len(config['fake_channels'])})", callback_data="manage_extra")],
+        ]
+        await query.edit_message_text("🗂 <b>CHANNEL MANAGER</b>\nChoose a group:", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(rows))
+        return
+    if data.startswith("askdel:"):
+        try:
+            _, group, raw_index = data.split(":", 2)
+            index = int(raw_index)
+            key = "channels" if group == "main" else "fake_channels"
+            config = load_config()
+            channel = config[key][index]
+        except (ValueError, IndexError, KeyError):
+            await query.edit_message_text("⚠️ Channel list changed. Open Manage Channels again.")
+            return
+        label = html.escape(str(channel.get('name') or channel.get('chat_id')))
+        confirm = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ CONFIRM DELETE", callback_data=f"confirmdel:{group}:{index}")],
+            [InlineKeyboardButton("❌ CANCEL", callback_data=f"canceldelete:{group}")],
+        ])
+        await query.edit_message_text(
+            f"⚠️ <b>DELETE CONFIRMATION</b>\n\nChannel: <b>{label}</b>\nID: <code>{html.escape(str(channel.get('chat_id')))}</code>\n\nAre you sure you want to delete this channel?",
+            parse_mode="HTML",
+            reply_markup=confirm
+        )
+        return
+    if data.startswith("canceldelete:"):
+        group = data.split(":", 1)[1]
+        await show_channel_list(query, context, group)
+        return
+    if data.startswith("confirmdel:"):
+        try:
+            _, group, raw_index = data.split(":", 2)
+            index = int(raw_index)
+            key = "channels" if group == "main" else "fake_channels"
+            config = load_config()
+            removed = config[key].pop(index)
+            if not save_config(config):
+                raise OSError("Could not save config")
+        except (ValueError, IndexError, KeyError, OSError):
+            await query.edit_message_text("❌ Delete failed. Refresh Manage Channels.")
+            return
+        await refresh_admin_dashboard(context.bot)
+        await query.edit_message_text(
+            f"✅ Deleted: <b>{html.escape(str(removed.get('name') or removed.get('chat_id')))}</b>\nUpdated channel count: {len(config[key])}",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 CHANNEL MANAGER", callback_data="manage_back")]])
+        )
+        return
+    if data in ("target_users", "target_channels", "target_both"):
+        target = data.replace("target_", "")
+        ADMIN_STATE[user_id] = {"type": "waiting_broadcast", "target": target}
+        
+        # Purono option delete kore notun prompt ashbe
+        global ADMIN_TRANSIENT_ID
+        if ADMIN_TRANSIENT_ID:
+            await delete_message_safely(context.bot, ADMIN_ID, ADMIN_TRANSIENT_ID)
+        
+        sent = await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text="📢 Send the broadcast message now.\nText, photo, video, GIF and document are supported.",
+            reply_markup=ADMIN_KEYBOARD
+        )
+        ADMIN_TRANSIENT_ID = sent.message_id
+        return
+    if data == "final_done":
+        state = ADMIN_STATE.get(user_id, {})
+        if state.get("type") != "waiting_final":
+            await admin_notice(query.message, context, "⚠️ No active Final Content collection.")
+            return
+        ADMIN_STATE.pop(user_id, None)
+        config = load_config()
+        await refresh_admin_dashboard(context.bot)
+        await admin_notice(
+            query.message,
+            context,
+            f"👑 <b>FINAL CONTENT SAVED</b>\n\n🎁 Total items: <b>{len(config['final_messages'])}</b>\nAll items will be sent after verification.",
+            parse_mode="HTML"
+        )
+        return
+
+async def handle_admin_menu(message, context):
+    user_id = message.from_user.id
+    text = (message.text or "").strip()
+    await delete_message_safely(context.bot, message.chat_id, message.message_id)
+
+    if text == "🏠 ADMIN HOME":
+        ADMIN_STATE.pop(user_id, None)
+        await show_admin_dashboard(message, context)
+        return
+    if text == "❌ CANCEL":
+        ADMIN_STATE.pop(user_id, None)
+        await admin_notice(message, context, "❌ Current operation cancelled.")
+        return
+    if text == "📢 BROADCAST":
+        ADMIN_STATE.pop(user_id, None)
+        await show_broadcast_targets(message, context)
+        return
+    if text == "🗂 MANAGE CHANNELS":
+        ADMIN_STATE.pop(user_id, None)
+        await refresh_admin_dashboard(context.bot)
+        await show_manage_channels(ADMIN_ID, context)
+        return
+    if text == "➕ MAIN CHANNEL":
+        ADMIN_STATE[user_id] = {"type": "waiting_main_channel"}
+        await admin_notice(message, context, "📢 ADD MAIN CHANNEL\n\nSend:\nhttps://t.me/channelname | -100123456789")
+        return
+    if text == "➕ EXTRA CHANNEL":
+        ADMIN_STATE[user_id] = {"type": "waiting_extra_channel"}
+        await admin_notice(message, context, "🔒 ADD EXTRA CHANNEL\n\nPrivate Join-Request invite link required.\n\nSend:\nhttps://t.me/+INVITECODE | -100123456789")
+        return
+    if text == "🖼 WELCOME":
+        ADMIN_STATE[user_id] = {"type": "waiting_welcome"}
+        await admin_notice(message, context, "🖼 Send your Welcome Message now.\nText, photo, video, GIF or document supported.")
+        return
+    if text == "🎁 FINAL CONTENT":
+        config = load_config()
+        config["final_messages"] = []
+        if not save_config(config):
+            await admin_notice(message, context, "❌ Could not reset Final Content.")
+            return
+        ADMIN_STATE[user_id] = {"type": "waiting_final"}
+        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("✅ DONE / FINISH", callback_data="final_done")]])
+        
+        global ADMIN_TRANSIENT_ID
+        if ADMIN_TRANSIENT_ID:
+            await delete_message_safely(context.bot, ADMIN_ID, ADMIN_TRANSIENT_ID)
+        sent = await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text="🎁 <b>MULTIPLE FINAL CONTENT MODE</b>\n\nSend every item one by one.\nWhen finished, press DONE / FINISH.\n\n⚠️ This replaces the previous collection.",
+            parse_mode="HTML",
+            reply_markup=keyboard
+        )
+        ADMIN_TRANSIENT_ID = sent.message_id
+        await refresh_admin_dashboard(context.bot)
+        return
+    if text == "📋 BOT STATUS":
+        config = load_config()
+        await refresh_admin_dashboard(context.bot)
+        await admin_notice(
+            message,
+            context,
+            f"📊 BOT STATUS\n\n👥 Users: {len(config['subscribers'])}\n📢 Main channels: {len(config['channels'])}\n🔒 Extra channels: {len(config['fake_channels'])}\n🎁 Final items: {len(config['final_messages'])}\n✅ Completed: {len(config['completed_users'])}"
+        )
+        return
+
+async def admin_message_handler(update, context):
+    message = update.message
+    user = update.effective_user
+    if not message or not user or user.id != ADMIN_ID:
+        return
+    menu_buttons = {
+        "📢 BROADCAST", "➕ MAIN CHANNEL", "➕ EXTRA CHANNEL",
+        "🗂 MANAGE CHANNELS", "🖼 WELCOME", "🎁 FINAL CONTENT",
+        "📋 BOT STATUS", "🏠 ADMIN HOME", "❌ CANCEL"
+    }
+    if message.text in menu_buttons:
+        await handle_admin_menu(message, context)
+        return
+
+    state_data = ADMIN_STATE.get(user.id, {})
+    state = state_data.get("type")
+
+    if state == "waiting_welcome":
+        config = load_config()
+        config["welcome_message"] = {"chat_id": message.chat_id, "message_id": message.message_id}
+        if save_config(config):
+            ADMIN_STATE.pop(user.id, None)
+            await admin_notice(message, context, "✅ Welcome Message saved successfully.")
+        else:
+            await admin_notice(message, context, "❌ Could not save Welcome Message.")
+        return
+
+    if state == "waiting_final":
+        config = load_config()
+        config["final_messages"].append({"chat_id": message.chat_id, "message_id": message.message_id})
+        if save_config(config):
+            await refresh_admin_dashboard(context.bot)
+            await admin_notice(message, context, f"✅ Final item #{len(config['final_messages'])} saved.\nSend next item or press DONE / FINISH.")
+        else:
+            await admin_notice(message, context, "❌ Could not save this item.")
+        return
+
+    if state == "waiting_broadcast":
+        target = state_data.get("target", "users")
+        ADMIN_STATE.pop(user.id, None)
+        config = load_config()
+        destinations = []
+        if target in ("users", "both"):
+            destinations.extend(("user", uid) for uid in config["subscribers"])
+        if target in ("channels", "both"):
+            destinations.extend(("channel", channel["chat_id"]) for channel in get_all_channels(config))
+        if not destinations:
+            await admin_notice(message, context, "⚠️ No broadcast destinations found.")
+            return
+        
+        progress = await context.bot.send_message(chat_id=ADMIN_ID, text=f"📢 Broadcast started: {len(destinations)} destinations.")
+        success = 0
+        failed = 0
+        blocked_users = []
+        for destination_type, destination_id in destinations:
+            ok = await broadcast_copy(context, destination_id, message.chat_id, message.message_id)
+            if ok:
+                success += 1
+            else:
+                failed += 1
+                if destination_type == "user":
+                    blocked_users.append(destination_id)
+            await asyncio.sleep(0.05)
+        
+        if blocked_users:
+            config = load_config()
+            config["subscribers"] = [uid for uid in config["subscribers"] if uid not in blocked_users]
+            save_config(config)
+        
+        await delete_message_safely(context.bot, message.chat_id, message.message_id)
+        await refresh_admin_dashboard(context.bot)
+        try:
+            await progress.edit_text(
+                f"🚀 <b>BROADCAST COMPLETE</b>\n\n🎯 Targets: {len(destinations)}\n✅ Success: {success}\n❌ Failed: {failed}\n🧹 Removed unreachable: {len(blocked_users)}",
+                parse_mode="HTML"
+            )
+        except TelegramError:
+            pass
+        return
+
+    if state in ("waiting_main_channel", "waiting_extra_channel"):
+        raw = message.text or ""
+        if "|" not in raw:
+            await admin_notice(message, context, "❌ Invalid format.\n\nhttps://t.me/channelname | -100123456789")
+            return
+        url, chat_id = [part.strip() for part in raw.split("|", 1)]
+        if not re.match(r"^https?://t\.me/[^\s]+$", url):
+            await admin_notice(message, context, "❌ Invalid Telegram URL.")
+            return
+        if not re.match(r"^(-100\d+|@\w+|\d+)$", chat_id):
+            await admin_notice(message, context, "❌ Invalid Channel ID.")
+            return
+        stored_id = int(chat_id) if chat_id.lstrip("-").isdigit() else chat_id
+        config = load_config()
+        duplicate = any(str(channel.get("chat_id")) == str(stored_id) for channel in get_all_channels(config))
+        if duplicate:
+            ADMIN_STATE.pop(user.id, None)
+            await refresh_admin_dashboard(context.bot)
+            await admin_notice(message, context, "⚠️ This channel is already saved.\nUse MANAGE CHANNELS to view or delete it.")
+            return
+        
+        key = "channels" if state == "waiting_main_channel" else "fake_channels"
+        name = url.rstrip("/").split("/")[-1]
+        try:
+            chat = await context.bot.get_chat(stored_id)
+            if getattr(chat, "title", None):
+                name = chat.title
+        except TelegramError:
+            pass
+        
+        config[key].append({"name": name, "url": url, "chat_id": stored_id})
+        if save_config(config):
+            ADMIN_STATE.pop(user.id, None)
+            await delete_message_safely(context.bot, message.chat_id, message.message_id)
+            await refresh_admin_dashboard(context.bot)
+            await admin_notice(message, context, f"✅ Channel added successfully.\n📢 Main total: {len(config['channels'])}\n🔒 Extra total: {len(config['fake_channels'])}")
+        else:
+            await admin_notice(message, context, "❌ Could not save channel.")
+        return
+
+async def broadcast_copy(context, destination, source_chat, source_message):
+    for attempt in range(2):
+        try:
+            await context.bot.copy_message(
+                chat_id=destination,
+                from_chat_id=source_chat,
+                message_id=source_message
+            )
+            return True
+        except RetryAfter as error:
+            if attempt == 0:
+                await asyncio.sleep(float(error.retry_after) + 1)
+        except TelegramError as error:
+            logger.warning("Broadcast failed for %s: %s", destination, error)
+            return False
+    return False
+
+async def cancel_command(update, context):
+    user = update.effective_user
+    if not user or user.id != ADMIN_ID:
+        return
+    ADMIN_STATE.pop(user.id, None)
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text="❌ Current operation cancelled.",
+        reply_markup=ADMIN_KEYBOARD
+    )
+
+async def error_handler(update, context):
+    logger.exception("Unhandled bot error: %s", context.error)
+
+# =========================================================
+# MAIN
+# =========================================================
+def main():
+    if not TOKEN:
+        raise ValueError("BOT_TOKEN is missing.")
+    request = HTTPXRequest(connect_timeout=30, read_timeout=60, write_timeout=60, pool_timeout=30)
+    app = ApplicationBuilder().token(TOKEN).request(request).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("cancel", cancel_command))
+    app.add_handler(ChatJoinRequestHandler(extra_join_request_handler))
+    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, admin_message_handler))
+    app.add_error_handler(error_handler)
+
+    print("==========================================")
+    print(" SAKIL BHAI VIP TELEGRAM BOT READY")
+    print("==========================================")
+    app.run_polling(drop_pending_updates=False, allowed_updates=Update.ALL_TYPES)
+
+if __name__ == "__main__":
+    main()
